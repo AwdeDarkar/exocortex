@@ -1,0 +1,9 @@
+[project]
+name = "Exocortex"
+code = "EX"
+version = "0.0.0"
+command = "/home/darkar/global_projects/.path/exctx"
+
+[template]
+name = "blank-project"
+version = ""
