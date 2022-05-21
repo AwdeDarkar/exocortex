@@ -2,7 +2,7 @@
 name = "Exocortex"
 code = "EX"
 version = "0.0.0"
-command = "/home/darkar/global_projects/.path/exctx"
+command = "/home/darkar/global_projects/.path/exo"
 
 [template]
 name = "blank-project"
