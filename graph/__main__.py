@@ -1,5 +1,5 @@
 """
-__main__.py
+graph/__main__.py
 CLI entry-point for the graph generator and related tools.
 
 Author: Ben Croisdale
@@ -8,19 +8,118 @@ Copyright (c) 2022 Ben Croisdale. All rights reserved.
 Released under the Apache 2.0 license as described in the file LICENSE.
 """
 
+import os
+
 import functools
+from types import SimpleNamespace
+from pathlib import Path
+import inspect
+import pprint
+import logging
+
+from libtool.utils.formatting import ANSIFormatter
 
 import click
 
 
 # UTILS
 
+
+class CustomFormatter(logging.Formatter):
+    """
+    Color log outputs by level.
+
+    TODO: Extract this to a utility file.
+    """
+
+    STYLES = {
+        "DEBUG": ["BLUE", ],
+        "INFO": ["WHITE", ],
+        "WARNING": ["MAGENTA", ],
+        "ERROR": ["RED", ],
+        "CRITICAL": ["RED", "BOLD", ],
+    }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        logging.trace = self.trace
+        self.printer = pprint.PrettyPrinter(indent=2, width=self.width)
+
+    @staticmethod
+    def setup_logging():
+        logger = logging.getLogger()
+        logger.setLevel(logging.ERROR)
+
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.ERROR)
+        ch.setFormatter(CustomFormatter())
+        logger.addHandler(ch)
+
+    @staticmethod
+    def set_level(level):
+        logger = logging.getLogger()
+        logger.setLevel(level)
+        for handler in logger.handlers:
+            handler.setLevel(level)
+
+    @property
+    def level(self):
+        logger = logging.getLogger()
+        return logger.level
+
+    @property
+    def width(self):
+        return os.get_terminal_size().columns
+
+    def format_file(self, fpath):
+        path = Path(fpath)
+        return f"{path.parent.name}/{path.name}"
+
+    def trace(self, obj, *args, **kwargs):
+        """ Pretty-print smart tracing utility """
+        if self.level > 5:
+            return
+
+        frame = inspect.getouterframes(inspect.currentframe(), 2)[1]
+        cline = frame.code_context[-1]  # Get the string of the trace call line
+        pre, *desc = cline.split("#")  # Find any description in a comment after
+        desc = desc or None
+        argstring = pre[pre.find("(")+1:pre.rfind(")")]  # Extract the outermost parentheses
+        otype = type(obj)
+
+        head = f"\u2192 {argstring} of type '{otype.__name__}'"
+        loc = f"{self.format_file(frame.filename)}, line {frame.lineno}"
+        head = head.ljust(self.width - len(loc) - 2)
+
+        dump = self.printer.pformat(obj)
+        full = ""\
+            + ANSIFormatter.ansify_string(["BLUE", "BOLD"], head)\
+            + ANSIFormatter.ansify_string(["BLUE", ], loc) + "  \n"\
+            + ANSIFormatter.ansify_string(["WHITE"], dump)\
+            + "\n"
+
+        print(full)
+
+    def format(self, record):
+        if record.levelname == "INFO":
+            full = record.msg
+        else:
+            right = f"{self.format_file(record.pathname)}, line {record.lineno}  "
+            message = record.msg
+            rcols = " " * (self.width - len(message) - len(right))
+            full = f"{message}{rcols}{right}"
+        return ANSIFormatter.ansify_string(self.STYLES[record.levelname], full)
+
+
 def common_params(f):
     """ Decorator to apply common parameters to all commands """
     @click.option("-v", "--verbose", count=True, help="Verbosity level [DEFAULT: ERROR]")
     @functools.wraps(f)
-    def wrapper(*args, **kwargs):
-        return f(*args, **kwargs)
+    def wrapper(*args, verbose, **kwargs):
+        # Setup logging for verbosity level
+        level = 40 - (verbose * 10)
+        CustomFormatter.set_level(level)
+        return f(*args, verbose, **kwargs)
     return wrapper
 
 
@@ -76,15 +175,44 @@ def build(verbose):
 
 @cli.group()
 @common_params
-def source(verbose):
+@click.pass_context
+@click.argument("source")
+def source(ctx, source, verbose):
     """
-    Manage external content sources.
+    Manage external content source SOURCE.
 
     The whole point of an exocortex is to integrate disparate sources from many
     modalities into a single interface. These commands are designed to import and
     manage various sources outside of `content/`.
     """
+    ctx.obj = SimpleNamespace()
+    ctx.obj.source = source
+
+
+@source.command(name="list")
+@common_params
+def list_sources(verbose):
+    """
+    List all known sources.
+    """
     pass
+
+
+@source.command(name="import")
+@click.option("--dry-run/--no-dry-run",
+              default=False,
+              help="Run the import code but don't actually write any files or data")
+@click.option("-d", "--directory",
+              default=None,
+              type=click.Path(),
+              help="Output results to this directory instead of `content/`")
+@click.pass_context
+@common_params
+def import_from_source(ctx, directory, dry_run, verbose):
+    """
+    Import from the source to the content directory.
+    """
+    print(ctx.obj.source)
 
 
 # SITE
@@ -104,7 +232,7 @@ def site(verbose):
     pass
 
 
-@graph.command(name="list")
+@site.command(name="list")
 @common_params
 def list_sites(verbose):
     """ List all current sites. """
@@ -130,7 +258,7 @@ def host(verbose):
     pass
 
 
-@graph.command(name="list")
+@host.command(name="list")
 @common_params
 def list_servers(verbose):
     """ List all hostable servers. """
@@ -225,4 +353,11 @@ def goal(verbose):
 
 
 if __name__ == "__main__":
+    """
+    logging.basicConfig(
+        level=level,
+        format=f"%(message)s %(levelname){rcol}s",
+    )
+    """
+    CustomFormatter.setup_logging()
     cli(prog_name="exo")
