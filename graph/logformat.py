@@ -59,6 +59,10 @@ class CustomFormatter(logging.Formatter):
 
     @property
     def width(self):
+        return self.get_width()
+
+    @staticmethod
+    def get_width():
         return os.get_terminal_size().columns
 
     def format_file(self, fpath):

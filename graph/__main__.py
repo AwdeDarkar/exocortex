@@ -10,8 +10,12 @@ Released under the Apache 2.0 license as described in the file LICENSE.
 
 import functools
 from types import SimpleNamespace
+import textwrap
 
 from logformat import CustomFormatter
+from storage import STORAGE_ROOT
+
+from source import SourceHandler
 
 import click
 
@@ -80,11 +84,11 @@ def build(verbose):
 
 # SOURCE
 
-@cli.group()
-@common_params
+@cli.group(invoke_without_command=True)
 @click.pass_context
+@common_params
 @click.argument("source")
-def source(ctx, source, verbose):
+def source(ctx, verbose, source):
     """
     Manage external content source SOURCE.
 
@@ -93,21 +97,80 @@ def source(ctx, source, verbose):
     manage various sources outside of `content/`.
     """
     ctx.obj = SimpleNamespace()
-    ctx.obj.source = source
+    ctx.obj.name = source
+    ctx.obj.source = SourceHandler[source]
+
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(view_source_info, verbose=verbose)
 
 
-@source.command(name="list")
+@cli.command(name="sources")
 @common_params
 def list_sources(verbose):
     """
     List all known sources.
     """
-    pass
+
+    # TODO Abstract this and pull it out, these tables will be nice to have
+    # BUG Click >8.0 is needed for the RGB colors but cookiecutter is incompatible, pls fix
+    table = [["Source Name"], ["Description"], ["Last Import"]]
+    maxlens = [len(s[0]) for s in table]
+    width = CustomFormatter.get_width()
+
+    def add_value(i, val):
+        table[i].append(val)
+        nmax = max(maxlens[i], len(val))
+        return table, nmax
+
+    for vals in SourceHandler.list:
+        table, maxlens[0] = add_value(0, vals["name"])
+        table, maxlens[2] = add_value(2, vals["last-imported"])
+
+        desc = next(filter(None, vals["docs"].split("\n"))).strip()
+        table, maxlens[1] = add_value(1, desc)
+
+    spare = width - sum(maxlens)
+    margin = int(spare/len(table))
+
+    for i in range(len(table[0])):
+        for j in range(len(table)):
+            color = "white" if i == 0 else ((0, 174, 222) if i % 2 == 0 else (2, 138, 176))
+            click.echo(
+                click.style(
+                    table[j][i].ljust(maxlens[j] + margin),
+                    underline=(i == 0),
+                    bold=(i*j == 0),
+                    fg=color,
+                ),
+                nl=False,
+            )
+        print()
+    print()
+
+
+@source.command(name="view")
+@click.pass_context
+@common_params
+def view_source_info(ctx, verbose):
+    """
+    Get a detailed overview of the source.
+    """
+    scls = ctx.obj.source
+    click.secho(f"Source: {scls.name}", fg="white", bold=True)
+    click.secho(f"Class: {scls.__name__}", fg="blue")
+    click.secho("Last Import: ", fg="blue", nl=False)
+    click.secho(
+        scls.info["last-imported"],
+        fg=("red" if scls.info["last-imported"] == "NEVER" else "blue")
+    )
+    click.echo()
+    click.secho(textwrap.dedent(scls.info["docs"]).strip(), italic=True)
+    click.echo()
 
 
 @source.command(name="import")
 @click.option("--dry-run/--no-dry-run",
-              default=False,
+              default=True,
               help="Run the import code but don't actually write any files or data")
 @click.option("-d", "--directory",
               default=None,
@@ -258,6 +321,8 @@ def goal(verbose):
     """
     raise NotImplementedError("Goal management command")
 
+
+test = SourceHandler._SOURCES["test"]
 
 if __name__ == "__main__":
     """
