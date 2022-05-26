@@ -13,7 +13,6 @@ from types import SimpleNamespace
 import textwrap
 
 from logformat import CustomFormatter
-from storage import STORAGE_ROOT
 
 from source import SourceHandler
 
@@ -169,20 +168,21 @@ def view_source_info(ctx, verbose):
 
 
 @source.command(name="import")
-@click.option("--dry-run/--no-dry-run",
-              default=True,
-              help="Run the import code but don't actually write any files or data")
+@common_params
 @click.option("-d", "--directory",
               default=None,
               type=click.Path(),
               help="Output results to this directory instead of `content/`")
+@click.option("--dry-run/--no-dry-run",
+              default=True,
+              help="Run the import code but don't actually write any files or data")
 @click.pass_context
-@common_params
-def import_from_source(ctx, directory, dry_run, verbose):
+def import_from_source(ctx, verbose, directory, dry_run):
     """
     Import from the source to the content directory.
     """
-    print(ctx.obj.source)
+    src = ctx.obj.source()
+    src.import_to_dir(directory, dry_run)
 
 
 # SITE
@@ -321,15 +321,8 @@ def goal(verbose):
     """
     raise NotImplementedError("Goal management command")
 
-
-test = SourceHandler._SOURCES["test"]
+trilium = SourceHandler["trilium"]()
 
 if __name__ == "__main__":
-    """
-    logging.basicConfig(
-        level=level,
-        format=f"%(message)s %(levelname){rcol}s",
-    )
-    """
     CustomFormatter.setup_logging()
     cli(prog_name="exo")
