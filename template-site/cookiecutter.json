@@ -1,0 +1,6 @@
+{
+    "project_name": "Site Example",
+    "__name_dashed": "{{ cookiecutter.project_name.lower().replace(' ', '-') }}",
+    "__name_title": "{{ cookiecutter.project_name.replace(' ', '') }}",
+    "__name_snake": "{{ cookiecutter.project_name.lower().replace(' ', '_') }}"
+}

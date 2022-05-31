@@ -20,6 +20,8 @@ EXOCORTEX_ROOT = Path(__file__).parent.parent.parent
 PROJECT_ROOT = EXOCORTEX_ROOT / "exocortex"
 CONTENT_ROOT = EXOCORTEX_ROOT / "content"
 
+SITE_TEMPLATE = PROJECT_ROOT / "template-site"
+
 
 class PersistentDict(dict):
     """

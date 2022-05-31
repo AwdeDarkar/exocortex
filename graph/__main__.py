@@ -12,12 +12,14 @@ import functools
 from types import SimpleNamespace
 import textwrap
 
+from cookiecutter.main import cookiecutter
+import click
+
 from logformat import CustomFormatter
 
 from source import SourceHandler
 
-import click
-
+from storage import SITE_TEMPLATE
 
 # UTILS
 
@@ -206,6 +208,28 @@ def site(verbose):
 @common_params
 def list_sites(verbose):
     """ List all current sites. """
+    raise NotImplementedError("Implement this")
+
+
+@site.command(name="make")
+@click.argument("name")
+@common_params
+def make_site(verbose, name):
+    """ Create a new site. """
+    cookiecutter(
+        str(SITE_TEMPLATE),
+        extra_context={
+            "project_name": name,
+        },
+        no_input=True,
+        overwrite_if_exists=True,  # Remove when done testing
+    )
+
+
+@site.command(name="delete")
+@common_params
+def delete_site(verbose):
+    """ Delete a site. """
     raise NotImplementedError("Implement this")
 
 
