@@ -1,0 +1,26 @@
+URLCHAR: "a".."z" | "0".."9" | "-"
+URLWORD: "a".."z" URLCHAR*
+
+?start: path
+
+?path: site
+     | site "." view
+     | site "/" semantic
+     | site "/" semantic "." view
+
+view: URLWORD
+site: URLWORD
+
+page: URLWORD
+
+semantic: object
+        | cluster
+        | "_" predicate
+        | predicate "/" object
+        | predicate "/" cluster
+
+cluster: subject "_" predicate "_" object
+
+subject: page | "(" cluster ")"
+predicate: URLWORD | "~"
+object: page | "(" cluster ")"

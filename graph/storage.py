@@ -15,10 +15,12 @@ import json
 
 
 STORAGE_ROOT = Path("~/global_projects/.storage/ex").expanduser()
+""" TODO Extract this to a config """
 
 EXOCORTEX_ROOT = Path(__file__).parent.parent.parent
 PROJECT_ROOT = EXOCORTEX_ROOT / "exocortex"
 CONTENT_ROOT = EXOCORTEX_ROOT / "content"
+SITES_ROOT = EXOCORTEX_ROOT / "sites"
 
 SITE_TEMPLATE = PROJECT_ROOT / "template-site"
 

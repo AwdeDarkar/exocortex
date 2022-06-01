@@ -8,6 +8,7 @@ Copyright (c) 2022 Ben Croisdale. All rights reserved.
 Released under the Apache 2.0 license as described in the file LICENSE.
 """
 
+import logging
 import functools
 from types import SimpleNamespace
 import textwrap
@@ -18,6 +19,7 @@ import click
 from logformat import CustomFormatter
 
 from source import SourceHandler
+from server import ServerHandler
 
 from storage import SITE_TEMPLATE
 
@@ -236,8 +238,10 @@ def delete_site(verbose):
 # HOST
 
 @cli.group()
+@click.pass_context
 @common_params
-def host(verbose):
+@click.argument("server")
+def server(ctx, verbose, server):
     """
     Manage the server hosting and devops cycle.
 
@@ -249,14 +253,29 @@ def host(verbose):
     hosting solution is desired. Additionally, this group has status and networking
     tools for debugging.
     """
-    pass
+    ctx.obj = SimpleNamespace()
+    ctx.obj.name = server
+    ctx.obj.server = ServerHandler[server]()
 
 
-@host.command(name="list")
+@cli.command(name="servers")
 @common_params
 def list_servers(verbose):
     """ List all hostable servers. """
-    raise NotImplementedError("List servers command")
+    print(ServerHandler.list)
+
+
+@server.command(name="host")
+@click.pass_context
+@common_params
+@click.option("-p", "--port", default=5000, help="Port to run the server on")
+def host_server(ctx, verbose, port):
+    """
+    Host the named server.
+
+    This command will create a new server and host it.
+    """
+    ctx.obj.server.run(port=port)
 
 
 # CODE
