@@ -16,7 +16,7 @@ import textwrap
 from cookiecutter.main import cookiecutter
 import click
 
-from logformat import CustomFormatter
+from logformat import CustomFormatter, print_dicts
 
 from source import SourceHandler
 from server import ServerHandler
@@ -113,42 +113,14 @@ def list_sources(verbose):
     """
     List all known sources.
     """
-
-    # TODO Abstract this and pull it out, these tables will be nice to have
-    # BUG Click >8.0 is needed for the RGB colors but cookiecutter is incompatible, pls fix
-    table = [["Source Name"], ["Description"], ["Last Import"]]
-    maxlens = [len(s[0]) for s in table]
-    width = CustomFormatter.get_width()
-
-    def add_value(i, val):
-        table[i].append(val)
-        nmax = max(maxlens[i], len(val))
-        return table, nmax
-
-    for vals in SourceHandler.list:
-        table, maxlens[0] = add_value(0, vals["name"])
-        table, maxlens[2] = add_value(2, vals["last-imported"])
-
-        desc = next(filter(None, vals["docs"].split("\n"))).strip()
-        table, maxlens[1] = add_value(1, desc)
-
-    spare = width - sum(maxlens)
-    margin = int(spare/len(table))
-
-    for i in range(len(table[0])):
-        for j in range(len(table)):
-            color = "white" if i == 0 else ((0, 174, 222) if i % 2 == 0 else (2, 138, 176))
-            click.echo(
-                click.style(
-                    table[j][i].ljust(maxlens[j] + margin),
-                    underline=(i == 0),
-                    bold=(i*j == 0),
-                    fg=color,
-                ),
-                nl=False,
-            )
-        print()
-    print()
+    print_dicts(
+        SourceHandler.list,
+        mapper={
+            "name": {"name": "Name"},
+            "docs": {"name": "Description", "transform": lambda s: s.split("\n")[1].strip()},
+            "last-imported": {"name": "Imported"},
+        },
+    )
 
 
 @source.command(name="view")

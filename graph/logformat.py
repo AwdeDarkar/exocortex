@@ -14,6 +14,8 @@ import pprint
 import logging
 from pathlib import Path
 
+import click
+
 from libtool.utils.formatting import ANSIFormatter
 
 
@@ -103,3 +105,67 @@ class CustomFormatter(logging.Formatter):
             rcols = " " * (self.width - len(message) - len(right))
             full = f"{message}{rcols}{right}"
         return ANSIFormatter.ansify_string(self.STYLES[record.levelname], full)
+
+
+# BUG Click >8.0 is needed for the RGB colors but cookiecutter is incompatible, pls fix
+def print_columns(
+        columns,
+        header_rows=1,
+        bold_first_col=True,
+        vbars=True,
+        outer_borders=True,
+        header_color=(221, 232, 237),
+        even_color=(189, 211, 219),
+        odd_color=(145, 188, 204),
+        ):
+    maxlens = [max([len(s) for s in col]) for col in columns]
+    width = CustomFormatter.get_width()
+    if vbars:
+        width -= len(columns)
+    spare = width - sum(maxlens)
+    margin = int(spare / len(columns))
+
+    for i in range(len(columns[0])):
+        for j in range(len(columns)):
+            click.echo(
+                click.style(
+                    columns[j][i].ljust(maxlens[j] + margin),
+                    underline=(i < header_rows),
+                    bold=(i < header_rows) or (bold_first_col and j == 0),
+                    fg=header_color if i < header_rows else
+                      (even_color if i % 2 == 0 else odd_color),
+                ),
+                nl=False,
+            )
+            if vbars:
+                click.echo(
+                    click.style(
+                        "|",
+                        underline=(i < header_rows),
+                        fg=header_color,
+                    ),
+                    nl=False,
+                )
+        click.echo()
+    click.echo()
+
+
+def print_table(table, **kwargs):
+    columns = []
+    for head, rows in table.items():
+        columns.append([head, *rows])
+    print_columns(columns, **kwargs)
+
+
+def print_dicts(dcts, fill_missing="?", mapper={}, **kwargs):
+    table = {}
+    for i, dct in enumerate(dcts):
+        for col_name, col_val in dct.items():
+            if col_name in mapper:
+                col_val = mapper[col_name].get("transform", lambda x: x)(col_val)
+                col_name = mapper[col_name].get("name", col_name)
+            if col_name not in table:
+                table[col_name] = [*[fill_missing]*i, col_val]
+            else:
+                table[col_name] += [col_val]
+    print_table(table, **kwargs)
