@@ -13,10 +13,144 @@ import inspect
 import pprint
 import logging
 from pathlib import Path
+from html.parser import HTMLParser
+from collections import namedtuple
+
+from typing import List
 
 import click
 
 from libtool.utils.formatting import ANSIFormatter
+
+
+class EchoHTML(HTMLParser):
+    """
+    Write log messages in an HTML-like format and print with click echo.
+
+    Supports the following tags:
+      - br: newline
+      - b: bold
+      - i: italic
+      - u: underline
+      - over: overline
+      - strike: strikethrough
+      - blink: blink
+      - fg: foreground color (see COLORS)
+    """
+
+    EchoAtom = namedtuple("EchoAtom", ["text", "style"])
+
+    COLORS = {
+        "magenta": (255, 0, 255),
+        "cyan": (0, 255, 255),
+        "lime": (0, 255, 0),
+        "silver": (192, 192, 192),
+        "gray": (128, 128, 128),
+        "maroon": (128, 0, 0),
+        "olive": (128, 128, 0),
+        "green": (0, 128, 0),
+        "navy": (0, 0, 128),
+        "teal": (0, 128, 128),
+    }
+    """ Colors referenced in the 'color' tag; fallback to ANSI colors """
+
+    @classmethod
+    def echo(cls, text):
+        """
+        Echo a string in HTML format.
+        """
+        parser = cls()
+        parser.feed(text)
+        parser.do_echo()
+
+    def __init__(self):
+        super().__init__()
+        self.echo_atoms: List[EchoHTML.EchoAtom] = []
+        self.current_style = {}
+        self.current_text = ""
+
+        self.fg_stack = []
+        self.bg_stack = []
+    
+    def do_echo(self):
+        """ Echo all accumulated atoms """
+        print(self.echo_atoms)
+        for atom in self.echo_atoms:
+            click.secho(atom.text, nl=False, reset=True, **atom.style)
+        click.secho("", reset=True)
+    
+    def handle_data(self, data):
+        """
+        Handle data.
+        """
+        print(f"Got data {data}")
+        self.current_text += data
+        self.echo_atoms.append(EchoHTML.EchoAtom(self.current_text, self.current_style.copy()))
+        self.current_text = ""
+    
+    def handle_starttag(self, tag, attrs):
+        """
+        Handle start tags.
+        """
+        print(f"Got start tag {tag}")
+        if tag == "br":
+            self.current_text += "\n"
+        if tag == "b":
+            self.current_style["bold"] = True
+        if tag == "i":
+            self.current_style["italic"] = True
+        if tag == "u":
+            self.current_style["underline"] = True
+        if tag == "over":
+            self.current_style["overline"] = True
+        if tag == "strike":
+            self.current_style["strikethrough"] = True
+        if tag == "blink":
+            self.current_style["blink"] = True
+        if tag == "fg":
+            color_name = attrs[0][1]
+            color = self.COLORS.get(color_name, color_name)
+            if "fg" in self.current_style:
+                self.fg_stack.append(self.current_style[pos])
+            self.current_style["fg"] = color
+        if tag == "bg":
+            color_name = attrs[0][1]
+            color = self.COLORS.get(color_name, color_name)
+            if "bg" in self.current_style:
+                self.bg_stack.append(self.current_style[pos])
+            self.current_style["bg"] = color
+
+    def handle_endtag(self, tag):
+        """
+        Handle end tags.
+        """
+        print(f"Got end tag {tag}")
+        if tag == "b":
+            self.current_style["bold"] = False
+        if tag == "i":
+            self.current_style["italic"] = False
+        if tag == "u":
+            self.current_style["underline"] = False
+        if tag == "over":
+            self.current_style["overline"] = False
+        if tag == "strike":
+            self.current_style["strikethrough"] = False
+        if tag == "blink":
+            self.current_style["blink"] = False
+        if tag == "fg":
+            if self.fg_stack:
+                color_name = self.fg_stack.pop()
+                color = self.COLORS.get(color_name, color_name)
+                self.current_style["fg"] = color
+            else:
+                del self.current_style["fg"]
+        if tag == "bg":
+            if self.bg_stack:
+                color_name = self.bg_stack.pop()
+                color = self.COLORS.get(color_name, color_name)
+                self.current_style["bg"] = color
+            else:
+                del self.current_style["bg"]
 
 
 class CustomFormatter(logging.Formatter):
@@ -164,8 +298,11 @@ def print_dicts(dcts, fill_missing="?", mapper={}, **kwargs):
             if col_name in mapper:
                 col_val = mapper[col_name].get("transform", lambda x: x)(col_val)
                 col_name = mapper[col_name].get("name", col_name)
+            elif mapper:
+                continue
             if col_name not in table:
                 table[col_name] = [*[fill_missing]*i, col_val]
             else:
                 table[col_name] += [col_val]
-    print_table(table, **kwargs)
+    if table:
+        print_table(table, **kwargs)
