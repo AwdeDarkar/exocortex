@@ -24,9 +24,7 @@ for modpath in (Path(__file__).parent).iterdir():
             "__init__.py", "exo_server.py", "nodejs.py",
             "url.py", "pathparser.lark"
         ]:
-        print(modpath)
         spec = importlib.util.spec_from_file_location(modpath.stem, modpath)
-        print(spec)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         names = [name for name in module.__dict__ if not name.startswith("_")]

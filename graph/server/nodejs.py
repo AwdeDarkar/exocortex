@@ -70,11 +70,11 @@ class NodeJS:
         if force_reinstall and self.node_modules_dir.exists():
             shutil.rmtree(self.node_modules_dir)
             self.package_lock_json.unlink()
-        proc = subprocess.run(["npm", "install"], cwd=str(self.rootdir))
+        proc = subprocess.Popen(["npm", "install"], cwd=str(self.rootdir))
         proc.wait()
 
     def build_dist(self):
         """ Build the distribution. """
-        proc = subprocess.run(["npm", "run", "build"], cwd=str(self.rootdir))
+        proc = subprocess.Popen(["npm", "run", "build"], cwd=str(self.rootdir))
         proc.wait()
         self._refresh_dist()

@@ -8,10 +8,12 @@ Copyright (c) 2022 Ben Croisdale. All rights reserved.
 Released under the Apache 2.0 license as described in the file LICENSE.
 """
 
+import json
+import os
+
 from functools import cached_property
 from types import SimpleNamespace
 from dataclasses import dataclass
-import json
 
 from typing import Callable
 
@@ -31,25 +33,20 @@ class sv_meta(type):
         return cls.NAME
 
     @property
+    def info(cls):
+        return {
+            "name": cls.NAME,
+            "docs": cls.__doc__,
+        }
+
+    @property
     def list(cls):
         """ Get a list of all servers with status information """
         lst = []
         for sclass in cls._SERVERS.values():
-            lst.append(sclass.name)
+            lst.append(sclass.info)
         return lst
 
-    @cached_property
-    def config(cls):
-        """ Get a static configuration for the server """
-        return SimpleNamespace(**cls.CONFIG)
-
-    @cached_property
-    def app(cls):
-        """
-        Get the Flask app for the server, creating it if necessary.
-        """
-        return Flask(cls.NAME)
-    
     def __getitem__(cls, name):
         return ServerHandler._SERVERS[name]
 
@@ -74,7 +71,7 @@ class ServerHandler(metaclass=sv_meta):
         "static_host": None,
     }
 
-    class ServerHandlerException:
+    class ServerHandlerException(Exception):
         pass
 
     class AlreadyRegistered(ServerHandlerException):
@@ -85,7 +82,7 @@ class ServerHandler(metaclass=sv_meta):
         missing_site_name: str
 
         def __str__(self):
-            return f"No site found for '{missing_site_name}'"
+            return f"No site found for '{self.missing_site_name}'"
 
     @classmethod
     def register_servers(cls):
@@ -122,6 +119,20 @@ class ServerHandler(metaclass=sv_meta):
             site.server = self
         self.setup_routes()
     
+    @cached_property
+    def app(self):
+        """
+        Get the Flask app for the server, creating it if necessary.
+        """
+        # We might want to unbundle these at some point
+        os.environ["FLASK_ENV"] = "development" if self.config.debug else "production"
+        return Flask(self.__class__.NAME)
+    
+    @cached_property
+    def config(self):
+        """ Get a static configuration for the server """
+        return SimpleNamespace(**self.__class__.CONFIG)
+
     def setup_routes(self):
         """
         Setup routes for the server.
@@ -129,6 +140,7 @@ class ServerHandler(metaclass=sv_meta):
         **Overriding** Servers can override this method to use a different
         routing scheme.
         """
+        print("Making routes")
         self.app.route("/", defaults={"path": ""})(self.resolve_path)
         self.app.route("/<path:path>")(self.resolve_path)
     
@@ -179,6 +191,7 @@ class ServerHandler(metaclass=sv_meta):
             host=host or self.config.host,
             port=port or self.config.port,
             debug=debug or self.config.debug,
+            use_reloader=False, # BUG: The reloader is broken because of import weirdness
         )
 
 class Site:

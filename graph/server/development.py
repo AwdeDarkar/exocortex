@@ -24,6 +24,7 @@ class DevelopmentServer(ServerHandler):
     }
 
 
+@DevelopmentServer.site
 class DevelopmentSite(DefaultSite):
     """
     Development site.

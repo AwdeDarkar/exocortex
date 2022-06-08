@@ -234,7 +234,13 @@ def server(ctx, verbose, server):
 @common_params
 def list_servers(verbose):
     """ List all hostable servers. """
-    print(ServerHandler.list)
+    print_dicts(
+        ServerHandler.list,
+        mapper={
+            "name": {"name": "Name"},
+            "docs": {"name": "Description", "transform": lambda s: s.split("\n")[1].strip()},
+        },
+    )
 
 
 @server.command(name="host")

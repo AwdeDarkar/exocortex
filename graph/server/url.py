@@ -29,7 +29,7 @@ class VisitorResolver(Visitor):
 
     @classmethod
     def parse(cls, string):
-        tree = cls.parse(string)
+        tree = cls.parser.parse(string)
         res = cls()
         res.visit_topdown(tree)
         return res
