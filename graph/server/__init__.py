@@ -13,7 +13,7 @@ from pathlib import Path
 import importlib
 import sys
 
-from .exo_server import ServerHandler
+from .exo_server import ServerHandler, Site
 
 old_path = sys.path
 sys.path = sys.path[:]
@@ -33,3 +33,4 @@ for modpath in (Path(__file__).parent).iterdir():
 sys.path = old_path
 
 ServerHandler.register_servers()
+Site.register_sites()

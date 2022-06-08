@@ -63,7 +63,10 @@ class NodeJS:
     @property
     def package(self):
         """ Get the contents of the package.json file. """
-        return json.loads((self.rootdir / "package.json").read_text())
+        try:
+            return json.loads((self.rootdir / "package.json").read_text())
+        except FileNotFoundError:
+            return {}
     
     def install_packages(self, force_reinstall=False):
         """ Install dependencies. """

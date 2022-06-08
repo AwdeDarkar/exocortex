@@ -19,7 +19,7 @@ import click
 from logformat import CustomFormatter, print_dicts
 
 from source import SourceHandler
-from server import ServerHandler
+from server import ServerHandler, Site
 
 from storage import SITE_TEMPLATE
 
@@ -163,11 +163,13 @@ def import_from_source(ctx, verbose, directory, dry_run):
 
 # SITE
 
-@cli.group()
+@cli.group(invoke_without_command=True)
+@click.pass_context
 @common_params
-def site(verbose):
+@click.argument("site")
+def site(ctx, verbose, site):
     """
-    Manage the site views.
+    Manage the SITE views.
 
     The second layer of the Exocortex is the server / site layer. These are
     conceptualized as subgraphs of the full content graph with particular specialized
@@ -175,14 +177,33 @@ def site(verbose):
     the sites themselves, creating new sites, archiving old ones, or performing certain
     migrations happens through these commands.
     """
-    pass
+    ctx.obj = SimpleNamespace()
+    ctx.obj.name = site
+    ctx.obj.site = Site[site]
+
+    if ctx.invoked_subcommand is None:
+        if ctx.obj.site:
+            info = ctx.obj.site.info
+            print(info)
+        else:
+            click.echo(f"No site named {site}, create it with `exo site {site} make`")
 
 
-@site.command(name="list")
+@cli.command(name="sites")
 @common_params
 def list_sites(verbose):
-    """ List all current sites. """
-    raise NotImplementedError("Implement this")
+    """ List all hostable sites. """
+    print_dicts(
+        Site.list,
+        mapper={
+            "name": {"name": "Name"},
+            "docs": {"name": "Description", "transform": lambda s: s.split("\n")[1].strip()},
+            "servers": {
+                "name": "Servers",
+                "transform": lambda slist: ", ".join([s.NAME for s in slist]),
+            },
+        },
+    )
 
 
 @site.command(name="make")
@@ -239,6 +260,10 @@ def list_servers(verbose):
         mapper={
             "name": {"name": "Name"},
             "docs": {"name": "Description", "transform": lambda s: s.split("\n")[1].strip()},
+            "sites": {
+                "name": "Sites",
+                "transform": lambda slist: ", ".join([s.NAME for s in slist]),
+            },
         },
     )
 

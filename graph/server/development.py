@@ -9,6 +9,9 @@ Released under the Apache 2.0 license as described in the file LICENSE.
 """
 
 from exo_server import ServerHandler, DefaultSite
+from sites import (
+    DevelopmentSite
+)
 
 
 class DevelopmentServer(ServerHandler):
@@ -24,10 +27,4 @@ class DevelopmentServer(ServerHandler):
     }
 
 
-@DevelopmentServer.site
-class DevelopmentSite(DefaultSite):
-    """
-    Development site.
-    """
-    
-    NAME = "development"
+DevelopmentServer.site(DevelopmentSite)
