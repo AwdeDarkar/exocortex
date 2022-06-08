@@ -11,13 +11,45 @@ Released under the Apache 2.0 license as described in the file LICENSE.
 """
 
 from pathlib import Path
+from datetime import datetime
+from collections import namedtuple
+from functools import cached_property
 import json
 
 
-STORAGE_ROOT = Path("~/global_projects/.storage/ex").expanduser()
+class RichPath(type(Path())):
+    """
+    A version of Path that includes additional helpful properties.
+    """
+
+    Times = namedtuple("Times", ["created", "modified", "accessed"])
+
+    @cached_property
+    def times(self):
+        """
+        Get modified, accessed, and created times as python datetime objects.
+
+        WARNING: 'Created' time is platform dependent and may not be accurate on unix.
+        """
+        stat = self.stat()
+        return RichPath.Times(
+            created=datetime.fromtimestamp(stat.st_ctime),
+            modified=datetime.fromtimestamp(stat.st_mtime),
+            accessed=datetime.fromtimestamp(stat.st_atime),
+        )
+    
+    @cached_property
+    def size(self):
+        """
+        Get the size of the file in bytes.
+        """
+        return self.stat().st_size
+
+
+STORAGE_ROOT = RichPath("~/global_projects/.storage/ex").expanduser()
 """ TODO Extract this to a config """
 
-EXOCORTEX_ROOT = Path(__file__).parent.parent.parent
+EXOCORTEX_ROOT = RichPath(__file__).parent.parent.parent
 PROJECT_ROOT = EXOCORTEX_ROOT / "exocortex"
 CONTENT_ROOT = EXOCORTEX_ROOT / "content"
 
