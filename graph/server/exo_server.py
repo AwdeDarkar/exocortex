@@ -37,6 +37,7 @@ class sv_meta(type):
         return {
             "name": cls.NAME,
             "docs": cls.__doc__,
+            "sites": cls.SITES.values(),
         }
 
     @property
@@ -105,6 +106,7 @@ class ServerHandler(metaclass=sv_meta):
     def site(cls, site_class):
         """ Decorator to register a site with a server """
         cls.SITES[site_class.NAME.lower()] = site_class(cls)
+        site_class.SERVERS[cls.NAME] = cls
         return site_class
     
     @classmethod
@@ -194,15 +196,67 @@ class ServerHandler(metaclass=sv_meta):
             use_reloader=False, # BUG: The reloader is broken because of import weirdness
         )
 
-class Site:
+
+class site_meta(type):
+    """
+    Metaclass for Site.
+    """
+
+    @property
+    def info(cls):
+        njs = cls.make_nodejs()
+        return {
+            "name": cls.NAME,
+            "docs": cls.__doc__,
+            "servers": cls.SERVERS.values(),
+            "source_dir": cls.site_source_dir,
+            "dist_dir": njs.dist_dir,
+            "node_dir": njs.node_modules_dir,
+            "package_dict": njs.package,
+        }
+
+    @property
+    def list(cls):
+        """ Get a list of all sites with detail information """
+        lst = []
+        for sclass in cls._SITES.values():
+            lst.append(sclass.info)
+        return lst
+    
+    @property
+    def site_source_dir(cls):
+        """
+        Get the directory containing the site project.
+        """
+        return SITES_ROOT / cls.NAME
+    
+    def make_nodejs(cls):
+        """
+        Make a nodejs wrapper manager.
+        """
+        return NodeJS(cls.site_source_dir)
+
+    def __getitem__(cls, name):
+        return cls._SITES.get(name)
+
+class Site(metaclass=site_meta):
     """ Base class for all sites """
 
-    NAME = "unnamed"
+    NAME = ""
 
     VIEWS = {}
     """ Views describe how a site page is rendered """
 
+    _SITES = {}
+    """ All registered sites available to servers """
+
+    SERVERS = {}
+    """ All servers linked to this site """
+
     class SiteException(Exception):
+        pass
+
+    class AlreadyRegisteredException(SiteException):
         pass
 
     @dataclass(frozen=True)
@@ -228,10 +282,29 @@ class Site:
         cls.VIEWS[""] = vfunc
         return vfunc
     
+    @classmethod
+    def register_sites(cls):
+        """
+        Register all sites that subclass Site.
+        """
+        if cls._SITES:
+            raise Site.AlreadyRegisteredException()
+        for subclass in cls.__subclasses__():
+            if subclass.NAME:
+                cls._SITES[subclass.NAME] = subclass
+            else:
+                # If no NAME is specified, this is an abstract site class
+                subclass.register_sites()
+                cls._SITES.update(subclass._SITES)
+
     def __init__(self, server_class):
         self.server_class = server_class
         self.server = None
 
+    def setup_site(self):
+        """
+        Setup the site, installing packages and building bundles as needed.
+        """
         self.nodejs.install_packages()
         self.nodejs.build_dist()
     
@@ -246,18 +319,11 @@ class Site:
         )
     
     @cached_property
-    def site_source_dir(self):
-        """
-        Get the directory containing the site project.
-        """
-        return SITES_ROOT / self.NAME
-    
-    @cached_property
     def nodejs(self):
         """
         Get the nodejs wrapper manager.
         """
-        return NodeJS(self.site_source_dir)
+        return self.__class__.make_nodejs()
 
     def view_for_page(self, viewmask):
         """
@@ -277,6 +343,10 @@ class Site:
     
 
 class DefaultSite(Site):
+    """
+    Sites following the default semantic URL scheme.
+    """
+
     @Site.default_view
     @Site.view("full")
     def full_view(self, content_tree):

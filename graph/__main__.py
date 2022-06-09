@@ -8,6 +8,7 @@ Copyright (c) 2022 Ben Croisdale. All rights reserved.
 Released under the Apache 2.0 license as described in the file LICENSE.
 """
 
+import os
 import logging
 import functools
 from types import SimpleNamespace
@@ -16,12 +17,12 @@ import textwrap
 from cookiecutter.main import cookiecutter
 import click
 
-from logformat import CustomFormatter, print_dicts
+from logformat import CustomFormatter, print_dicts, EchoHTML as html
 
 from source import SourceHandler
 from server import ServerHandler, Site
 
-from storage import SITE_TEMPLATE
+from storage import SITE_TEMPLATE, SITES_FILE, SITES_ROOT
 
 # UTILS
 
@@ -180,11 +181,41 @@ def site(ctx, verbose, site):
     ctx.obj = SimpleNamespace()
     ctx.obj.name = site
     ctx.obj.site = Site[site]
+    ctx.obj.nodejs = ctx.obj.site.make_nodejs()
 
     if ctx.invoked_subcommand is None:
         if ctx.obj.site:
             info = ctx.obj.site.info
-            print(info)
+            html.echo(
+                f"<fg c=white>Site: <b>{info['name']}</b><br />"
+                f"<i><fg c=blue>{info['docs']}</fg></i><br />"
+                f"Source Location:\t<fg c=teal>{info['source_dir']}<br /></fg>"
+                f"Servers Linked:\t\t<fg c=teal>{', '.join([s.name for s in info['servers']])}<br /></fg>"
+                "Source Updated:\t\t" +
+                ("<fg c=red>NEVER</fg>"
+                    if not info['source_dir'].exists()
+                    else f"<fg c=teal>{info['source_dir'].times.modified.strftime('%Y-%m-%d %H:%M:%S')}</fg>"
+                ) +
+                "\n"
+                "Last package install:\t" +
+                ("<fg c=red>NEVER</fg>"
+                    if not info['node_dir'].exists()
+                    else f"<fg c=teal>{info['node_dir'].times.modified.strftime('%Y-%m-%d %H:%M:%S')}</fg>"
+                ) +
+                "\n"
+                "Last dist build:\t" +
+                ("<fg c=red>NEVER</fg>"
+                    if not info['dist_dir'].exists()
+                    else f"<fg c=teal>{info['dist_dir'].times.modified.strftime('%Y-%m-%d %H:%M:%S')}</fg>"
+                ) +
+                "\n"
+                "Site Version:\t\t" +
+                ("<fg c=red>package.json NOT FOUND</fg>"
+                    if not info['package_dict']
+                    else f"<fg c=teal>{info['package_dict']['version']}</fg>"
+                ) +
+                "\n</fg>"
+            )
         else:
             click.echo(f"No site named {site}, create it with `exo site {site} make`")
 
@@ -207,18 +238,38 @@ def list_sites(verbose):
 
 
 @site.command(name="make")
-@click.argument("name")
+@click.pass_context
 @common_params
-def make_site(verbose, name):
+def make_site(ctx, verbose):
     """ Create a new site. """
+    click.echo(f"Creating site '{ctx.obj.name}'")
+    os.chdir(SITES_ROOT)
     cookiecutter(
         str(SITE_TEMPLATE),
         extra_context={
-            "project_name": name,
+            "project_name": ctx.obj.name,
         },
         no_input=True,
         overwrite_if_exists=True,  # Remove when done testing
     )
+    with SITES_FILE.open("a") as f:
+        pass  # TODO: Add site class stub to sites.py
+
+
+@site.command(name="install")
+@click.pass_context
+@common_params
+def install_site_packages(ctx, verbose):
+    """ Install required node packages. """
+    ctx.obj.nodejs.install_packages()
+
+
+@site.command(name="build")
+@click.pass_context
+@common_params
+def build_site(ctx, verbose):
+    """ Build the site bundles. """
+    ctx.obj.nodejs.build_dist()
 
 
 @site.command(name="delete")

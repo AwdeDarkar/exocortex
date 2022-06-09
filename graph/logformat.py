@@ -74,7 +74,6 @@ class EchoHTML(HTMLParser):
     
     def do_echo(self):
         """ Echo all accumulated atoms """
-        print(self.echo_atoms)
         for atom in self.echo_atoms:
             click.secho(atom.text, nl=False, reset=True, **atom.style)
         click.secho("", reset=True)
@@ -83,7 +82,6 @@ class EchoHTML(HTMLParser):
         """
         Handle data.
         """
-        print(f"Got data {data}")
         self.current_text += data
         self.echo_atoms.append(EchoHTML.EchoAtom(self.current_text, self.current_style.copy()))
         self.current_text = ""
@@ -92,7 +90,6 @@ class EchoHTML(HTMLParser):
         """
         Handle start tags.
         """
-        print(f"Got start tag {tag}")
         if tag == "br":
             self.current_text += "\n"
         if tag == "b":
@@ -111,20 +108,19 @@ class EchoHTML(HTMLParser):
             color_name = attrs[0][1]
             color = self.COLORS.get(color_name, color_name)
             if "fg" in self.current_style:
-                self.fg_stack.append(self.current_style[pos])
+                self.fg_stack.append(self.current_style["fg"])
             self.current_style["fg"] = color
         if tag == "bg":
             color_name = attrs[0][1]
             color = self.COLORS.get(color_name, color_name)
             if "bg" in self.current_style:
-                self.bg_stack.append(self.current_style[pos])
+                self.bg_stack.append(self.current_style["bg"])
             self.current_style["bg"] = color
 
     def handle_endtag(self, tag):
         """
         Handle end tags.
         """
-        print(f"Got end tag {tag}")
         if tag == "b":
             self.current_style["bold"] = False
         if tag == "i":

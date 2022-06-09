@@ -53,7 +53,7 @@ class NodeJS:
     @property
     def dist_dir(self):
         """ Get the distribution directory. """
-        return self.rootdir / "dist"
+        return self.rootdir / "public" / "build"
     
     @property
     def package_lock_json(self):

@@ -31,12 +31,19 @@ class RichPath(type(Path())):
 
         WARNING: 'Created' time is platform dependent and may not be accurate on unix.
         """
-        stat = self.stat()
-        return RichPath.Times(
-            created=datetime.fromtimestamp(stat.st_ctime),
-            modified=datetime.fromtimestamp(stat.st_mtime),
-            accessed=datetime.fromtimestamp(stat.st_atime),
-        )
+        if self.is_dir():
+            max_ctime = max(self.rglob("*"), key=lambda f: f.stat().st_ctime).stat().st_ctime
+            max_mtime = max(self.rglob("*"), key=lambda f: f.stat().st_mtime).stat().st_mtime
+            max_atime = max(self.rglob("*"), key=lambda f: f.stat().st_atime).stat().st_atime
+        try:
+            stat = self.stat()
+            return RichPath.Times(
+                created=datetime.fromtimestamp(max(stat.st_ctime, max_ctime)),
+                modified=datetime.fromtimestamp(max(stat.st_mtime, max_mtime)),
+                accessed=datetime.fromtimestamp(max(stat.st_atime, max_atime)),
+            )
+        except FileNotFoundError:
+            return RichPath.Times(created=None, modified=None, accessed=None)
     
     @cached_property
     def size(self):
@@ -55,6 +62,7 @@ CONTENT_ROOT = EXOCORTEX_ROOT / "content"
 
 SITE_TEMPLATE = PROJECT_ROOT / "template-site"
 SITES_ROOT = PROJECT_ROOT / "sites"
+SITES_FILE = PROJECT_ROOT / "graph" / "server" / "sites.py"
 
 
 class PersistentDict(dict):
