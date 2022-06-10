@@ -1,13 +1,12 @@
 <script lang="ts">
-    export let name: string;
-    const hascontent = content;
-    console.log(hascontent);
+    import Tree from "./common/component/Tree.svelte"
+    export let contentTree: any
+    console.log(contentTree)
 </script>
 
 <main>
-    <h1>Hello {name}!</h1>
     <div>
-    {@html hascontent}
+        <Tree tree={contentTree} />
     </div>
 </main>
 

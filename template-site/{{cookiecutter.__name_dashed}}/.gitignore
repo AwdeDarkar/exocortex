@@ -1,0 +1,6 @@
+# Linked material
+src/common
+
+# Node
+node_modules/
+public/

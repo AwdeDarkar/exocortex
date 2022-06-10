@@ -1,14 +1,10 @@
 <script lang="ts">
-    export let name: string;
-    const hascontent = content;
-    console.log(hascontent);
+    import Tree from "./common/component/Tree.svelte"
+    export let contentTree: any
 </script>
 
 <main>
-    <h1>Hello {name}!</h1>
-    <div>
-    {@html hascontent}
-    </div>
+    <p>New site</p>
 </main>
 
 <style>
@@ -17,18 +13,5 @@ main {
 padding: 1em;
          max-width: 240px;
 margin: 0 auto;
-}
-
-h1 {
-color: #ff3e00;
-       text-transform: uppercase;
-       font-size: 4em;
-       font-weight: 100;
-}
-
-@media (min-width: 640px) {
-    main {
-        max-width: none;
-    }
 }
 </style>
