@@ -64,6 +64,8 @@ SITE_TEMPLATE = PROJECT_ROOT / "template-site"
 SITES_ROOT = PROJECT_ROOT / "sites"
 SITES_FILE = PROJECT_ROOT / "graph" / "server" / "sites.py"
 
+SNIPPETS_TEMPLATE = PROJECT_ROOT / "template-py-snippets"
+
 
 class PersistentDict(dict):
     """

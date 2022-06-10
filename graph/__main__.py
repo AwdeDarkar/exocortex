@@ -15,6 +15,7 @@ from types import SimpleNamespace
 import textwrap
 
 from cookiecutter.main import cookiecutter
+from jinja2 import Environment, FileSystemLoader
 import click
 
 from logformat import CustomFormatter, print_dicts, EchoHTML as html
@@ -22,7 +23,7 @@ from logformat import CustomFormatter, print_dicts, EchoHTML as html
 from source import SourceHandler
 from server import ServerHandler, Site
 
-from storage import SITE_TEMPLATE, SITES_FILE, SITES_ROOT
+from storage import SITE_TEMPLATE, SITES_FILE, SITES_ROOT, SNIPPETS_TEMPLATE
 
 # UTILS
 
@@ -181,7 +182,8 @@ def site(ctx, verbose, site):
     ctx.obj = SimpleNamespace()
     ctx.obj.name = site
     ctx.obj.site = Site[site]
-    ctx.obj.nodejs = ctx.obj.site.make_nodejs()
+    if ctx.obj.site:
+        ctx.obj.nodejs = ctx.obj.site.make_nodejs()
 
     if ctx.invoked_subcommand is None:
         if ctx.obj.site:
@@ -241,8 +243,15 @@ def list_sites(verbose):
 @click.pass_context
 @common_params
 def make_site(ctx, verbose):
-    """ Create a new site. """
+    """
+    Create a new site.
+
+    TODO: Allow the user to add a description.
+    TODO: Allow the user to control auto-adding to servers.
+    """
+
     click.echo(f"Creating site '{ctx.obj.name}'")
+    
     os.chdir(SITES_ROOT)
     cookiecutter(
         str(SITE_TEMPLATE),
@@ -252,8 +261,31 @@ def make_site(ctx, verbose):
         no_input=True,
         overwrite_if_exists=True,  # Remove when done testing
     )
+    
+    env = Environment(
+        loader=FileSystemLoader(SNIPPETS_TEMPLATE),
+        autoescape=False,
+    )
+    template = env.get_template("new-site-stub.py")
+    classname = f"{ctx.obj.name.capitalize()}Site"
+    code = template.render(
+        name=ctx.obj.name,
+        classname=classname,
+    )
+
     with SITES_FILE.open("a") as f:
-        pass  # TODO: Add site class stub to sites.py
+        f.write("\n\n" + code)
+
+    with (SITES_FILE.parent / "development.py").open("r+") as f:
+        src = f.read()
+        lines = src.split("\n")
+        import_index = lines.index("from sites import (")
+        lines.insert(import_index + 1, f"    {classname},")
+        lines.append(f"DevelopmentServer.site({ classname })")
+
+        src = "\n".join(lines)
+        f.seek(0)
+        f.write(src)
 
 
 @site.command(name="install")
