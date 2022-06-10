@@ -8,6 +8,7 @@ Copyright (c) 2022 Ben Croisdale. All rights reserved.
 Released under the Apache 2.0 license as described in the file LICENSE.
 """
 
+import time
 import json
 import os
 
@@ -142,7 +143,6 @@ class ServerHandler(metaclass=sv_meta):
         **Overriding** Servers can override this method to use a different
         routing scheme.
         """
-        print("Making routes")
         self.app.route("/", defaults={"path": ""})(self.resolve_path)
         self.app.route("/<path:path>")(self.resolve_path)
     
@@ -156,14 +156,8 @@ class ServerHandler(metaclass=sv_meta):
         parsed = VisitorResolver.parse(path)
         site = self.get_site(parsed.siteview)
 
-        bundle = parsed.bundle
-        if bundle:
-            if bundle == "js":
-                return Response(site.nodejs.dist.js, mimetype="application/javascript")
-            if bundle == "map":
-                return Response(site.nodejs.dist.map, mimetype="application/javascript")
-            if bundle == "css":
-                return Response(site.nodejs.dist.css, mimetype="text/css")
+        if site.setup_time is None:
+            site.setup_site()
 
         return site.make_page(parsed)
     
@@ -172,8 +166,19 @@ class ServerHandler(metaclass=sv_meta):
         Generate a content tree from a parsed URL.
 
         TODO: Access-checking will happen here when users are implemented.
+        TODO: Implement; this is a placeholder.
         """
-        return {}
+        return [
+            {
+                "type": "document",
+                "children": [
+                    {
+                        "type": "paragraph",
+                        "content": "This is a placeholder content tree.",
+                    },
+                ]
+            }
+        ]
     
     @classmethod
     def get_site(cls, name):
@@ -273,7 +278,7 @@ class Site(metaclass=site_meta):
             cls.VIEWS[name or vfunc.__name__] = vfunc
             return vfunc
         return wrapper
-    
+
     @classmethod
     def default_view(cls, vfunc):
         """
@@ -301,11 +306,13 @@ class Site(metaclass=site_meta):
     def __init__(self, server_class):
         self.server_class = server_class
         self.server = None
+        self.setup_time = None
 
     def setup_site(self):
         """
         Setup the site, installing packages and building bundles as needed.
         """
+        self.setup_time = time.time()
         self.nodejs.install_packages()
         self.nodejs.build_dist()
     
@@ -339,6 +346,9 @@ class Site(metaclass=site_meta):
         """
         Make a page from a parsed URL.
         """
+        if parsed.bundle:
+            # TODO: Make this more general for MPAs
+            return self.view_for_page(parsed.viewmask)(self, None)
         content_tree = self.server.generate_content_tree(parsed)
         return self.view_for_page(parsed.viewmask)(self, content_tree)
     
@@ -354,7 +364,11 @@ class DefaultSite(Site):
         """
         Get the full rich javascript view for a page.
         """
-        raise NotImplementedError("Implement the svelte view")
+        return self.template_env.get_template("svelte-index.html").render(
+            contentTree=content_tree,
+            site=self.__class__.NAME,
+            title="Testing dev site",
+        )
     
     @Site.view("flat")
     def flat_view(self, content_tree):
@@ -385,4 +399,34 @@ class DefaultSite(Site):
         return Response(
             json.dumps(content_tree),
             mimetype="application/json",
+        )
+    
+    @Site.view("js")
+    def js(self, _):
+        """
+        Get the javascript bundle for the site.
+        """
+        return Response(
+            self.nodejs.dist.js,
+            mimetype="application/javascript"
+        )
+    
+    @Site.view("css")
+    def js(self, _):
+        """
+        Get the css bundle for the site.
+        """
+        return Response(
+            self.nodejs.dist.css,
+            mimetype="text/css"
+        )
+    
+    @Site.view("jsmap")
+    def js(self, _):
+        """
+        Get the javascript source map for the site.
+        """
+        return Response(
+            self.nodejs.dist.map,
+            mimetype="application/json"
         )

@@ -32,13 +32,26 @@ class NodeJS:
     
     def _refresh_dist(self):
         with (self.dist_dir / "bundle.js").open("r") as f:
-            self.dist.js = f.read()
+            self.dist.js = self._postprocess_js(f.read())
         with (self.dist_dir / "bundle.js.map").open("r") as f:
             self.dist.map = f.read()
         with (self.dist_dir / "bundle.css").open("r") as f:
             self.dist.css = f.read()
         self.dist.updated = os.path.getmtime(self.dist_dir / "bundle.js")
         self.on_update()
+    
+    def _postprocess_js(self, jssrc: str):
+        """
+        Postprocess the JS source.
+
+        This is a bit of a hack, but it's the easiest way to get the source map to have
+        the right url.
+        """
+        lines = jssrc.split("\n")
+        lines[1] = lines[1].replace(
+            "//# sourceMappingURL=bundle.js.map", "//# sourceMappingURL=bundle.jsmap"
+        )
+        return "\n".join(lines)
     
     @property
     def node_modules_dir(self):

@@ -2,16 +2,14 @@
 {% block head %}
         <title>{{ title }}</title>
         <link rel='icon' type='image/png' href='{{ site }}/includes/favicon-png'>
-        <link rel='stylesheet' href='{{ site }}/includes/global-css'>
-        <link rel='stylesheet' href='{{ site }}/bundle/css'>
+        <!-- <link rel='stylesheet' href='{{ site }}/includes/global-css'> -->
+        <link rel='stylesheet' href='{{ site }}/bundle.css'>
 
         <script type=text/javascript>
-            const contentTree = `
-                {{ contentTree | tojson | safe }}
-            `;
+            const contentTree = {{ contentTree | tojson | safe }};
         </script>
 
-        <script defer src='{{ site }}/bundle/js'></script>
+        <script defer src='{{ site }}/bundle.js'></script>
 {% endblock %}
 {% block body %}
 {% endblock %}

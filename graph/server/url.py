@@ -42,9 +42,8 @@ class VisitorResolver(Visitor):
     
     @property
     def bundle(self):
-        if self.siteview != "bundle":
-            return None
-        return self.semantic_target["object"]
+        # TODO: make this more general for MPAs
+        return self.semantic_target.get("object") == "bundle"
 
     def path(self, tree):
         print(tree.data)
