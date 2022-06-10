@@ -173,7 +173,7 @@ class ServerHandler(metaclass=sv_meta):
 
         TODO: Access-checking will happen here when users are implemented.
         """
-        raise NotImplementedError("Implement content tree generation")
+        return {}
     
     @classmethod
     def get_site(cls, name):
@@ -264,7 +264,7 @@ class Site(metaclass=site_meta):
         missing_view_name: str
 
         def __str__(self):
-            return f"No view found for '{missing_view_name}'"
+            return f"No view found for '{self.missing_view_name}'"
 
     @classmethod
     def view(cls, name=None):
@@ -280,6 +280,7 @@ class Site(metaclass=site_meta):
         Get the default view for pages.
         """
         cls.VIEWS[""] = vfunc
+        cls.VIEWS[None] = vfunc
         return vfunc
     
     @classmethod
@@ -339,7 +340,7 @@ class Site(metaclass=site_meta):
         Make a page from a parsed URL.
         """
         content_tree = self.server.generate_content_tree(parsed)
-        return self.view_for_page(parsed.viewmask)(content_tree)
+        return self.view_for_page(parsed.viewmask)(self, content_tree)
     
 
 class DefaultSite(Site):
