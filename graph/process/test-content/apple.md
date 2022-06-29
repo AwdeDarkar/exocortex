@@ -1,5 +1,21 @@
 # Apple
-An apple (is a fruit)[[is|fruit]].
+Have some $\int_0^\infty$.
+
+$$
+\latex
+$$
+
+An apple [is a fruit]([is|fruit]). [This is just](a/normal/link).
+
+.. directive type :: directive
+   :option: value info
+   :second-option: more value stuff
+
+   free (raw) text
+
+   multiple
+   lines of
+   it
 
 _Cras laoreet mattis neque, ut tempus nisi. Nullam sapien est, lacinia eu faucibus vel, blandit eu nunc._ Fusce eget viverra lectus. Donec sollicitudin lorem rhoncus tellus porta suscipit. Nullam finibus **blandit porttitor.** In sed rutrum massa. Phasellus velit ipsum, dictum at posuere ac, condimentum ac nulla. Sed accumsan eu lectus ut lobortis. Phasellus vitae cursus enim. Curabitur nisl nunc, dictum vitae velit et, sodales ornare nulla. Nam sollicitudin malesuada turpis, dapibus luctus orci hendrerit sed. Nullam egestas tempor auctor. Suspendisse euismod dui at erat dignissim, quis interdum eros sagittis.
 
