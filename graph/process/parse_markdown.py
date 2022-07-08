@@ -54,13 +54,6 @@ class InternalLink(InlineElement):
         else:
             self._set_obj(g1)
 
-        """
-        print(f"InternalLink: {match.string}")
-        print(f"\tPredicate = '{self.predicate}'")
-        print(f"\tObject = '{self.object}'")
-        print(f"\tView = '{self.view}'")
-        """
-
     def _set_obj(self, s):
         if "." in s:
             self.object, self.view = s.split(".")
@@ -133,7 +126,6 @@ class DirectiveBlock(BlockElement):
         options_done = False
         source.consume()
         source.anchor()
-        print(source.next_line())
         with source.under_state(state):
             while not source.exhausted:
                 if not options_done and DirectiveOption.match(source):
@@ -244,11 +236,11 @@ renderer = marko.Markdown(
 )
 renderer._setup_extensions()
 renderer.parser.block_elements["DirectiveBlock"] = DirectiveBlock  # BUG: This shouldn't be needed...
+ast_map = {}
 
 for name in content_map.keys():
     item = content_map[name]
     item["ast"] = renderer.parse(item["raw"])
+    ast_map[name] = item["ast"]
     item["json"] = renderer.render(item["ast"])
     globals()[name] = Content(**item)
-
-check = apple.ast.children[3]
