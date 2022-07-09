@@ -6,6 +6,7 @@ prototype
 __pycache__/
 *.py[cod]
 *$py.class
+.ipynb_checkpoints/
 
 # Node
 node_modules/

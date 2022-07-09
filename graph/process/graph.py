@@ -8,7 +8,8 @@ Copyright (c) 2022 Ben Croisdale. All rights reserved.
 Released under the Apache 2.0 license as described in the file LICENSE.
 """
 
-from types import SimpleNamespace
+from uuid import uuid4
+import toml
 
 import numpy as np
 
@@ -17,6 +18,7 @@ from marko.inline import InlineElement
 from marko.block import Document
 
 from graph_tool import Graph, GraphView, load_graph
+from graph_tool.draw import graph_draw
 
 class RawString(InlineElement):
     """ It seems inconsistent to have bare strings alongside elements... """
@@ -179,7 +181,27 @@ class DocumentGraph:
     @property
     def edges(self):
         return self.graph.edges()
+    
+    @property
+    def calculate_values(self, recipes):
+        for predicate, pred_recipes in recipes["predicates"].items():
+            for recipe, args in pred_recipes.items():
+                pass
 
+    @property
+    def predicate_counts(self):
+        """ Get a dictionary of all predicates with the number of times they appear """
+        counts = {}
+        for edge in self.edges:
+            for predicate in self.props.edge.predicates[edge]:
+                counts[predicate] = counts.get(predicate, 0) + 1
+        return counts
+    
+    @property
+    def predicates(self):
+        """ Get a list of all unique predicates """
+        return list(self.predicate_counts.keys())
+    
     def predicate_masked(self, predicate):
         """ Return a masked graph using only the given predicate """
         mask = np.array([predicate in plist for plist in graph.props.edge.predicates])
@@ -187,7 +209,15 @@ class DocumentGraph:
     
     def save(self, path):
         self.graph.save(path, fmt="gt")
+    
+    def draw(self, **kwargs):
+        graph_draw(
+            self.graph,
+            vertex_text=self.props.vertex.names,
+            vertex_text_position=-1.1,
 
-from process.parse_markdown import ast_map, apple
-graph = DocumentGraph(doc_map=ast_map)
-check = None
+            edge_text=self.props.edge.predicates,
+            edge_text_color="white",
+            edge_font_size=12,
+            **kwargs
+        )

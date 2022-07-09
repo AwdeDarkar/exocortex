@@ -215,32 +215,27 @@ class DirectiveExtension:
     elements: [DirectiveBlock, DirectiveOption, DirectiveContent]
 
 
-### TESTING / DEBUG CODE (delete when done) ###
-from pathlib import Path
+def load_content(content_dir):
+    content_map = {}
+    ast_map = {}
+    for path in content_dir.glob("*.md"):
+        with path.open("r") as f:
+            content_map[path.stem] = {"raw": f.read()}
 
-content_dir = Path("test-content")
-content_map = {}
-Content = namedtuple("Content", ["raw", "ast", "json"])
+    renderer = marko.Markdown(
+        extensions=[
+            LinkExtension,
+            DirectiveExtension,
+            LatexExtension,
+        ],
+        renderer=ASTRenderer, 
+    )
+    renderer._setup_extensions()
+    renderer.parser.block_elements["DirectiveBlock"] = DirectiveBlock  # BUG: This shouldn't be needed...
+    for name in content_map.keys():
+        item = content_map[name]
+        item["ast"] = renderer.parse(item["raw"])
 
-for path in content_dir.glob("*.md"):
-    with path.open("r") as f:
-        content_map[path.stem] = {"raw": f.read()}
-
-renderer = marko.Markdown(
-    extensions=[
-        LinkExtension,
-        DirectiveExtension,
-        LatexExtension,
-    ],
-    renderer=ASTRenderer, 
-)
-renderer._setup_extensions()
-renderer.parser.block_elements["DirectiveBlock"] = DirectiveBlock  # BUG: This shouldn't be needed...
-ast_map = {}
-
-for name in content_map.keys():
-    item = content_map[name]
-    item["ast"] = renderer.parse(item["raw"])
-    ast_map[name] = item["ast"]
-    item["json"] = renderer.render(item["ast"])
-    globals()[name] = Content(**item)
+        ast_map[name] = item["ast"]
+    
+    return ast_map
