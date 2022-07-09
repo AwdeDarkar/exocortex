@@ -16,7 +16,7 @@ from marko.element import Element
 from marko.inline import InlineElement
 from marko.block import Document
 
-from graph_tool import Graph, GraphView
+from graph_tool import Graph, GraphView, load_graph
 
 class RawString(InlineElement):
     """ It seems inconsistent to have bare strings alongside elements... """
@@ -86,61 +86,108 @@ class DocumentGraph:
     as edges.
     """
 
-    def __init__(self, doc_map):
-        self.graph = Graph(directed=True)
+    @classmethod
+    def load(cls, path):
+        return cls(graph=load_graph(path, fmt="gt"))
+
+    def __init__(self, doc_map=None, graph=None):
+        if bool(doc_map) == bool(graph):
+            raise Exception("Exactly one of `doc_map` or `graph` must be set!")
+        self.graph = graph or Graph(directed=True)
         self.vertex_map = {}
         self.edge_map = {}
-        self.doc_map = doc_map
 
-        self._props = SimpleNamespace()
-        self._props.graph = SimpleNamespace()
-        self._props.vertex = SimpleNamespace()
-        self._props.edge = SimpleNamespace()
+        class _edge_props():
+            def __setattr__(_, name, value):
+                self.graph.edge_properties[name] = value
+            
+            def __getattr__(_, name):
+                return self.graph.edge_properties[name]
 
-        self._build_graph()
+        class _vertex_props():
+            def __setattr__(_, name, value):
+                self.graph.vertex_properties[name] = value
+            
+            def __getattr__(_, name):
+                return self.graph.vertex_properties[name]
 
-    def _build_graph(self):
-        self.doc_map = collect_semlinks(self.doc_map)
-        vertices = self.graph.add_vertex(len(self.doc_map))
-        self._props.vertex.names = self.graph.new_vertex_property("string")
-        self._props.vertex.documents = self.graph.new_vertex_property("python::object")
+        class _graph_props():
+            def __setattr__(_, name, value):
+                self.graph.graph_properties[name] = value
+            
+            def __getattr__(_, name):
+                return self.graph.graph_properties[name]
 
-        for name, vertex in zip(self.doc_map.keys(), vertices):
+        class _graph_props():
+            """ Some convenience classes to make internal PropertyMaps easier """
+            edge = _edge_props()
+            vertex = _vertex_props()
+            graph = _graph_props()
+
+        self.props = _graph_props()
+
+        if doc_map:
+            self._build_graph(doc_map)
+        else:
+            self._populate_map()
+        
+    def _populate_map(self):
+        for vertex in self.vertices:
+            self.vertex_map[self.props.vertex.names[vertex]] = vertex
+        for edge in self.edges:
+            self.edge_map[(
+                self.props.vertex.names[edge.source()],
+                self.props.vertex.names[edge.target()]
+            )] = edge
+
+    def _build_graph(self, doc_map):
+        doc_map = collect_semlinks(doc_map)
+        vertices = self.graph.add_vertex(len(doc_map))
+        self.props.vertex.names = self.graph.new_vertex_property("string")
+        self.props.vertex.documents = self.graph.new_vertex_property("python::object")
+
+        for name, vertex in zip(doc_map.keys(), vertices):
             self.vertex_map[name] = vertex
-            self._props.vertex.names[vertex] = name
-            self._props.vertex.documents[vertex] = self.doc_map[name]["document"]
+            self.props.vertex.names[vertex] = name
+            self.props.vertex.documents[vertex] = doc_map[name]["document"]
 
-        self._props.edge.predicates = self.graph.new_edge_property("vector<string>")
-        self._props.edge.element_lists = self.graph.new_edge_property("python::object")
-        for name, dct in self.doc_map.items():
+        self.props.edge.predicates = self.graph.new_edge_property("vector<string>")
+        self.props.edge.element_lists = self.graph.new_edge_property("python::object")
+        for name, dct in doc_map.items():
             for link in dct["links"]:
                 obj = link.object
-                print(f"{name} -[{link.predicate}]-> {obj}")
-                if obj in self.doc_map:
+                if obj in doc_map:
                     edge = self.edge_map.get((name, obj))
                     if edge is None:
                         edge = self.graph.add_edge(self.vertex_map[name], self.vertex_map[obj])
                         self.edge_map[(name, obj)] = edge
-                    self._props.edge.predicates[edge] = [
-                        *self._props.edge.predicates[edge],
+                    self.props.edge.predicates[edge] = [
+                        *self.props.edge.predicates[edge],
                         link.predicate,
                     ]
-                    self._props.edge.element_lists[edge] = [
-                        *(self._props.edge.element_lists[edge] or []),
+                    self.props.edge.element_lists[edge] = [
+                        *(self.props.edge.element_lists[edge] or []),
                         link,
                     ]
                 else:
                     pass # TODO handle link to nonexistent
-    
+
     @property
     def vertices(self):
         return self.graph.vertices()
 
+    @property
+    def edges(self):
+        return self.graph.edges()
+
     def predicate_masked(self, predicate):
         """ Return a masked graph using only the given predicate """
-        mask = np.array([predicate in plist for plist in graph._props.edge.predicates])
+        mask = np.array([predicate in plist for plist in graph.props.edge.predicates])
         return GraphView(self.graph, efilt=mask)
+    
+    def save(self, path):
+        self.graph.save(path, fmt="gt")
 
 from process.parse_markdown import ast_map, apple
-graph = DocumentGraph(ast_map)
+graph = DocumentGraph(doc_map=ast_map)
 check = None
