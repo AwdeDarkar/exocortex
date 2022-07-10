@@ -17,7 +17,10 @@ from marko.element import Element
 from marko.inline import InlineElement
 from marko.block import Document
 
-from graph_tool import Graph, GraphView, load_graph
+from graph_tool import (
+    Graph, GraphView, load_graph,
+    draw, centrality, topology, clustering,
+)
 from graph_tool.draw import graph_draw
 
 class RawString(InlineElement):
@@ -82,17 +85,154 @@ def collect_semlinks(doc_map):
     return doc_map
 
 
+class DocumentVertex:
+    """
+    A convenience wrapper around vertices in a DocumentGraph that makes
+    properties easier to access and use.
+    """
+
+    def __init__(self, docgraph, vertex):
+        self.docgraph = docgraph
+        self.vertex = vertex
+
+        self.in_degree = self.vertex.in_degree
+        self.out_degree = self.vertex.out_degree
+        self.is_valid = self.vertex.is_valid
+    
+    def __getitem__(self, propname):
+        return self.docgraph.graph.vertex_properties[propname][self.vertex]
+    
+    def __setitem__(self, propname, value):
+        self.docgraph.graph.vertex_properties[propname][self.vertex] = value
+    
+    def _wrap_vertex_iterator(self, iterator):
+        for vertex in iterator:
+            yield DocumentVertex(self.docgraph, vertex)
+
+    def _wrap_edge_iterator(self, iterator):
+        for edge in iterator:
+            yield DocumentEdge(self.docgraph, edge)
+
+    def __str__(self):
+        return self.name
+    
+    def __repr__(self):
+        return f"<DocumentVertex '{self}'>"
+    
+    @property
+    def name(self):
+        return self["names"]
+    
+    @name.setter
+    def name(self, value):
+        self["names"] = value
+    
+    @property
+    def document(self):
+        return self["documents"]
+    
+    @document.setter
+    def document(self, value):
+        self["documents"] = value
+    
+    def all_edges(self):
+        return self._wrap_edge_iterator(self.vertex.all_edges())
+    
+    def in_edges(self):
+        return self._wrap_edge_iterator(self.vertex.in_edges())
+    
+    def out_edges(self):
+        return self._wrap_edge_iterator(self.vertex.out_edges())
+    
+    def all_neighbors(self):
+        return self._wrap_vertex_iterator(self.vertex.all_neighbors())
+    
+    def in_neighbors(self):
+        return self._wrap_vertex_iterator(self.vertex.in_neighbors())
+    
+    def out_neighbors(self):
+        return self._wrap_vertex_iterator(self.vertex.out_neighbors())
+    
+    def shortest_path_to(self, other, **kwargs):
+        vertices, edges = topology.shortest_path(
+            self.docgraph.graph,
+            self.vertex,
+            other.vertex,
+            **kwargs,
+        )
+        return (
+            [DocumentVertex(self.docgraph, v) for v in vertices],
+            [DocumentEdge(self.docgraph, e) for e in edges],
+        )
+
+
+class DocumentEdge:
+    """
+    A convenience wrapper around edges in a DocumentGraph
+    """
+
+    def __init__(self, docgraph, edge):
+        self.docgraph = docgraph
+        self.edge = edge
+
+        self.is_valid = self.edge.is_valid
+
+    def __getitem__(self, propname):
+        return self.docgraph.graph.edge_properties[propname][self.edge]
+    
+    def __setitem__(self, propname, value):
+        self.docgraph.graph.edge_properties[propname][self.edge] = value
+
+    def __str__(self):
+        return f"'{self.source().name}' -[{','.join(self.predicates)}]-> '{self.target().name}'"
+    
+    def __repr__(self):
+        return f"<DocumentEdge \"{self}\">"
+    
+    @property
+    def predicates(self):
+        return self["predicates"]
+    
+    @property
+    def elements(self):
+        return {
+            pred: elem
+            for pred, elem in zip(
+                self.predicates,
+                self["element_lists"]
+            )
+        }
+
+    def source(self):
+        return DocumentVertex(self.docgraph, self.edge.source())
+
+    def target(self):
+        return DocumentVertex(self.docgraph, self.edge.target())
+    
+
 class DocumentGraph:
     """
     A graph of a collection of documents that represents links between documents
     as edges.
     """
 
+    calc_functions = {}
+
+    @classmethod
+    def calc_function(cls, f):
+        cls.calc_functions[f.__name__] = f
+        return f
+
+    @classmethod
+    def _setup_calculations(cls):
+        cls.calc_function(centrality.pagerank)
+
     @classmethod
     def load(cls, path):
         return cls(graph=load_graph(path, fmt="gt"))
 
     def __init__(self, doc_map=None, graph=None):
+        self.__class__._setup_calculations()
         if bool(doc_map) == bool(graph):
             raise Exception("Exactly one of `doc_map` or `graph` must be set!")
         self.graph = graph or Graph(directed=True)
@@ -176,17 +316,46 @@ class DocumentGraph:
 
     @property
     def vertices(self):
-        return self.graph.vertices()
+        for vertex in self.graph.vertices():
+            yield DocumentVertex(self, vertex)
+    
+    def __getitem__(self, name):
+        return DocumentVertex(self, self.vertex_map[name])
 
     @property
     def edges(self):
-        return self.graph.edges()
+        for edge in self.graph.edges():
+            yield DocumentEdge(self, edge)
     
     @property
+    def is_dag(self):
+        return topology.is_DAG(self.graph)
+    
+    @property
+    def is_planar(self):
+        return topology.is_planar(self.graph)
+    
+    @property
+    def is_tree(self):
+        pass
+    
+    @property
+    def is_connected(self):
+        pass
+
+    @property
+    def disconnected_subgraphs(self):
+        pass
+    
     def calculate_values(self, recipes):
         for predicate, pred_recipes in recipes["predicates"].items():
-            for recipe, args in pred_recipes.items():
-                pass
+            pgraph = self.predicate_masked(predicate, raw=False)
+            for recipe, kwargs in pred_recipes.items():
+                res = None
+                if kwargs == True:
+                    res = pgraph.calculate(recipe)
+                elif kwargs:
+                    pass
 
     @property
     def predicate_counts(self):
@@ -202,22 +371,98 @@ class DocumentGraph:
         """ Get a list of all unique predicates """
         return list(self.predicate_counts.keys())
     
-    def predicate_masked(self, predicate):
-        """ Return a masked graph using only the given predicate """
-        mask = np.array([predicate in plist for plist in graph.props.edge.predicates])
-        return GraphView(self.graph, efilt=mask)
+    def predicate_masked(self, predicate, raw=True):
+        """ Return a masked graph using only the given predicate(s) """
+        if isinstance(predicate, list):
+            mask = np.array(
+                [bool(set(predicate) & set(plist)) for plist in self.props.edge.predicates]
+            )
+        else:
+            mask = np.array([predicate in plist for plist in self.props.edge.predicates])
+        if raw:
+            return GraphView(self.graph, efilt=mask)
+        else:
+            return DocumentGraph(graph=GraphView(self.graph, efilt=mask))
+    
+    @property
+    def pgraph_in(self):
+        """ Convenience masked graph filtering on the 'in' predicate """
+        return self.predicate_masked("in", raw=False)
+    
+    @property
+    def pgraph_ref(self):
+        """ Convenience masked graph filtering on the 'ref' predicate """
+        return self.predicate_masked("ref", raw=False)
+    
+    @property
+    def pgraph_embed(self):
+        """ Convenience masked graph filtering on the 'embed' predicate """
+        return self.predicate_masked("embed", raw=False)
+    
+    @property
+    def pgraph_media(self):
+        """ Convenience masked graph filtering on the 'media' predicate """
+        return self.predicate_masked("media", raw=False)
+    
+    @property
+    def pgraph_tags(self):
+        """ Convenience masked graph filtering on the tagging predicates """
+        return self.predicate_masked(["is", "has", "about", "uses", "tag"], raw=False)
+    
+    def vertices_in_from(self, vertex):
+        yield vertex
+        for neighboor in vertex.in_neighbors():
+            for subv in self.vertices_in_from(neighboor):
+                yield subv
+    
+    def subgraph_around(self, root, include_root=True):
+        """ Uses the 'in' predicate to get the subgraph around a root """
+        ingraph = self.pgraph_in
+        root = ingraph.vertex_map[self.props.vertex.names[root]]
+        gen = ingraph.vertices_in_from(root)
+        if include_root:
+            selected = set(gen)
+        else:
+            next(gen)
+            selected = set(gen)
+        return DocumentGraph(graph=GraphView(self.graph, vfilt=lambda v: v in selected))
     
     def save(self, path):
         self.graph.save(path, fmt="gt")
     
-    def draw(self, **kwargs):
+    def layout(self, kind, **kwargs):
+        if kind == "sfdp":
+            return draw.sfdp_layout(self.graph, **kwargs)
+        elif kind == "planar":
+            return draw.planar_layout(self.graph, **kwargs)
+        elif kind == "fr":
+            return draw.fruchterman_reingold_layout(self.graph, **kwargs)
+        elif kind == "arf":
+            return draw.arf_layout(self.graph, **kwargs)
+        elif kind == "radial_tree":
+            return draw.radial_tree_layout(self.graph, **kwargs)
+        elif kind == "random":
+            return draw.random_layout(self.graph, **kwargs)
+        else:
+            raise Exception(f"Unknown layout '{kind}'")
+    
+    def calculate(self, name, **kwargs):
+        if name not in self.__class__.calc_functions:
+            raise Exception(f"Unknown calculation '{name}'")
+        return self.__class__.calc_functions[name](self.graph, **kwargs)
+
+    def draw(self, size_calc=None, **kwargs):
+        vsize = 24
+        if size_calc:
+            vsize = self.calculate(size_calc)
         graph_draw(
             self.graph,
             vertex_text=self.props.vertex.names,
             vertex_text_position=-1.1,
+            vertex_size=vsize,
 
             edge_text=self.props.edge.predicates,
             edge_text_color="white",
-            edge_font_size=12,
+            edge_font_size=14,
             **kwargs
         )

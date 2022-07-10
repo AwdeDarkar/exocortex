@@ -214,13 +214,30 @@ class DirectiveContent(BlockElement):
 class DirectiveExtension:
     elements: [DirectiveBlock, DirectiveOption, DirectiveContent]
 
+def recursive_load(root_dir, parent=""):
+    """ TODO: still not sure what to do about name collisions... """
+    raw_map = {}
+    this = root_dir / "this.md"
+    if this.exists():
+        with this.open("r") as f:
+            raw_map[root_dir.stem] = (parent and f"[[in|{parent}]]\n") + f.read()
+    parent_group = root_dir.stem if this.exists() else parent
+    for child in root_dir.iterdir():
+        if child.stem == "this":
+            continue
+        elif child.is_dir():
+            raw_map.update(
+                recursive_load(child, parent=parent_group)
+            )
+        else:
+            with child.open("r") as f:
+                raw_map[child.stem] = (f"[[in|{parent_group}]]\n" if parent_group else "")\
+                    + f.read()
+    return raw_map
 
 def load_content(content_dir):
-    content_map = {}
+    content_map = recursive_load(content_dir)
     ast_map = {}
-    for path in content_dir.glob("*.md"):
-        with path.open("r") as f:
-            content_map[path.stem] = {"raw": f.read()}
 
     renderer = marko.Markdown(
         extensions=[
@@ -232,10 +249,7 @@ def load_content(content_dir):
     )
     renderer._setup_extensions()
     renderer.parser.block_elements["DirectiveBlock"] = DirectiveBlock  # BUG: This shouldn't be needed...
-    for name in content_map.keys():
-        item = content_map[name]
-        item["ast"] = renderer.parse(item["raw"])
-
-        ast_map[name] = item["ast"]
+    for name, raw in content_map.items():
+        ast_map[name] = renderer.parse(raw)
     
     return ast_map
