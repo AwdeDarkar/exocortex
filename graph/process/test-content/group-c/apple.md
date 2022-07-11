@@ -1,11 +1,12 @@
+[[in|other-group]]
 # Apple
+An apple [is a fruit]([is|fruit]). [This is just](a/normal/link).
 Have some $\int_0^\infty$.
 
 $$
 \latex
 $$
 
-An apple [is a fruit]([is|fruit]). [This is just](a/normal/link).
 
 .. directive type :: directive
    :option: value info

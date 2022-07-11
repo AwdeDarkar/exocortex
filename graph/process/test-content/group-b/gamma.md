@@ -1,3 +1,4 @@
+[[about|alpha]]
 # Gamma
 Aliquam fringilla, neque a finibus tempor, augue risus interdum urna, ac aliquet velit ipsum faucibus nisi. Sed blandit ornare felis, at aliquam tellus iaculis non. Nunc tincidunt nisl et feugiat aliquet. In hac habitasse platea dictumst. Pellentesque sit amet dui libero. Aliquam lobortis tincidunt tempus. Maecenas luctus aliquam placerat. Vestibulum vel placerat ipsum. Suspendisse euismod, mauris eget gravida volutpat, turpis mauris feugiat nisi, ut venenatis dolor urna in dui. Duis dignissim lacus vel lectus maximus consectetur.
 
@@ -11,3 +12,4 @@ Curabitur vel scelerisque risus, ac posuere nulla. Maecenas vel diam malesuada l
 
 [[epsilon]]
 [[omega]]
+[[delta]]
