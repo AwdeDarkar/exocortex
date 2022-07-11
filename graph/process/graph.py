@@ -8,6 +8,8 @@ Copyright (c) 2022 Ben Croisdale. All rights reserved.
 Released under the Apache 2.0 license as described in the file LICENSE.
 """
 
+from collections import namedtuple
+
 from uuid import uuid4
 import toml
 
@@ -22,6 +24,9 @@ from graph_tool import (
     draw, centrality, topology, clustering,
 )
 from graph_tool.draw import graph_draw
+
+import graphene
+from graphene import ObjectType, List, Field, Schema
 
 class RawString(InlineElement):
     """ It seems inconsistent to have bare strings alongside elements... """
@@ -119,6 +124,10 @@ class DocumentVertex:
     def __repr__(self):
         return f"<DocumentVertex '{self}'>"
     
+    @property
+    def uuid(self):
+        return self["uuids"]
+
     @property
     def name(self):
         return self["names"]
@@ -237,6 +246,7 @@ class DocumentGraph:
             raise Exception("Exactly one of `doc_map` or `graph` must be set!")
         self.graph = graph or Graph(directed=True)
         self.vertex_map = {}
+        self.vertex_id_map = {}
         self.edge_map = {}
 
         class _edge_props():
@@ -286,12 +296,16 @@ class DocumentGraph:
         doc_map = collect_semlinks(doc_map)
         vertices = self.graph.add_vertex(len(doc_map))
         self.props.vertex.names = self.graph.new_vertex_property("string")
+        self.props.vertex.uuids = self.graph.new_vertex_property("string")
         self.props.vertex.documents = self.graph.new_vertex_property("python::object")
 
         for name, vertex in zip(doc_map.keys(), vertices):
             self.vertex_map[name] = vertex
             self.props.vertex.names[vertex] = name
+            self.props.vertex.uuids[vertex] = uuid4()  # TODO we need bidirection persistence...
             self.props.vertex.documents[vertex] = doc_map[name]["document"]
+
+            self.vertex_id_map[self.props.vertex.uuids[vertex]] = vertex
 
         self.props.edge.predicates = self.graph.new_edge_property("vector<string>")
         self.props.edge.element_lists = self.graph.new_edge_property("python::object")
@@ -321,6 +335,9 @@ class DocumentGraph:
     
     def __getitem__(self, name):
         return DocumentVertex(self, self.vertex_map[name])
+    
+    def get_vertex_by_id(self, id):
+        return DocumentVertex(self, self.vertex_id_map[id])
 
     @property
     def edges(self):
@@ -465,4 +482,108 @@ class DocumentGraph:
             edge_text_color="white",
             edge_font_size=14,
             **kwargs
+        )
+    
+    @property
+    def graphql_schema(self):
+        """ Get a Graphene-generated GraphQL schema for API resolution """
+        
+        NodeValueObject = namedtuple("Node", ["id", "name", "document"])
+        class Node(ObjectType):
+            id = graphene.ID(required=True)
+            name = graphene.String(required=True)
+            document = graphene.JSONString(required=True)
+
+            all_neighbors = List(lambda: Node)
+            in_neighbors = List(lambda: Node)
+            out_neighbors = List(lambda: Node)
+
+            all_edges = List(lambda: Edge)
+            in_edges = List(lambda: Edge)
+            out_edges = List(lambda: Edge)
+
+            @classmethod
+            def from_vertex(cls, vertex: DocumentVertex):
+                return NodeValueObject(
+                    id=vertex.uuid,
+                    name=vertex.name,
+                    document="{}",  # TODO Implement
+                )
+            
+            def resolve_all_neighbors(root, info):
+                return [
+                    Node.from_vertex(v)
+                    for v in self[root.name].all_neighbors()
+                ]
+            
+            def resolve_in_neighbors(root, info):
+                return [
+                    Node.from_vertex(v)
+                    for v in self[root.name].in_neighbors()
+                ]
+            
+            def resolve_out_neighbors(root, info):
+                return [
+                    Node.from_vertex(v)
+                    for v in self[root.name].out_neighbors()
+                ]
+        
+            def resolve_all_edges(root, info):
+                return [
+                    Edge.from_edge(e)
+                    for e in self[root.name].all_edges()
+                ]
+            
+            def resolve_in_edges(root, info):
+                return [
+                    Edge.from_edge(e)
+                    for e in self[root.name].in_edges()
+                ]
+            
+            def resolve_out_edges(root, info):
+                return [
+                    Edge.from_edge(e)
+                    for e in self[root.name].out_edges()
+                ]
+            
+        EdgeValueObject = namedtuple("Edge", ["source", "target", "predicates", "element"])
+        class Edge(ObjectType):
+            source = Field(lambda: Node, required=True)
+            target = Field(lambda: Node, required=True)
+            predicates = List(graphene.String)
+            element = graphene.JSONString(required=True)
+
+            @classmethod
+            def from_edge(cls, edge: DocumentEdge):
+                return EdgeValueObject(
+                    source=Node.from_vertex(edge.source()),
+                    target=Node.from_vertex(edge.target()),
+                    predicates=edge.predicates,
+                    element="{}",  # TODO Implement
+                )
+        
+        TripleValueObject = namedtuple("Triple", ["object", "predicate", "subject"])
+        class Triple(ObjectType):
+            object = Field(lambda: Node, required=True)
+            predicate = Field(lambda: Edge, required=True)
+            subject = Field(lambda: Node, required=True)
+
+        class Query(ObjectType):
+            nodes = List(Node)
+            node_by_name = Field(Node, name=graphene.String(required=True))
+            node_by_id = Field(Node, id=graphene.ID(required=True))
+
+            def resolve_nodes(parent, info):
+                return [
+                    Node.from_vertex(v) for v in self.vertices
+                ]
+
+            def resolve_node_by_name(parent, info, name):
+                return Node.from_vertex(self[name])
+
+            def resolve_node_by_id(parent, info, id):
+                return Node.from_vertex(self.get_vertex_by_id(id))
+
+        return Schema(
+            query=Query,
         )
