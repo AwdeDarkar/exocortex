@@ -1,6 +1,7 @@
 # General
 .env
 prototype
+.vscode/
 
 # Python
 __pycache__/

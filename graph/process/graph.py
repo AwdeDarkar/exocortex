@@ -285,11 +285,12 @@ class DocumentGraph:
         
     def _populate_map(self):
         for vertex in self.vertices:
-            self.vertex_map[self.props.vertex.names[vertex]] = vertex
+            self.vertex_map[vertex.name] = vertex.vertex
+            self.vertex_id_map[vertex.uuid] = vertex.vertex
         for edge in self.edges:
             self.edge_map[(
-                self.props.vertex.names[edge.source()],
-                self.props.vertex.names[edge.target()]
+                edge.source().name,
+                edge.target().name,
             )] = edge
 
     def _build_graph(self, doc_map):
@@ -388,7 +389,7 @@ class DocumentGraph:
         """ Get a list of all unique predicates """
         return list(self.predicate_counts.keys())
     
-    def predicate_masked(self, predicate, raw=True):
+    def predicate_masked(self, predicate, raw=False):
         """ Return a masked graph using only the given predicate(s) """
         if isinstance(predicate, list):
             mask = np.array(
@@ -435,8 +436,8 @@ class DocumentGraph:
     def subgraph_around(self, root, include_root=True):
         """ Uses the 'in' predicate to get the subgraph around a root """
         ingraph = self.pgraph_in
-        root = ingraph.vertex_map[self.props.vertex.names[root]]
-        gen = ingraph.vertices_in_from(root)
+        root = ingraph[root.name]
+        gen = (v.vertex for v in ingraph.vertices_in_from(root))
         if include_root:
             selected = set(gen)
         else:
@@ -488,7 +489,7 @@ class DocumentGraph:
     def graphql_schema(self):
         """ Get a Graphene-generated GraphQL schema for API resolution """
         
-        NodeValueObject = namedtuple("Node", ["id", "name", "document"])
+        NodeValueObject = namedtuple("Node", ["id", "name", "document", "graph"])
         class Node(ObjectType):
             id = graphene.ID(required=True)
             name = graphene.String(required=True)
@@ -508,42 +509,43 @@ class DocumentGraph:
                     id=vertex.uuid,
                     name=vertex.name,
                     document="{}",  # TODO Implement
+                    graph=vertex.docgraph,
                 )
             
             def resolve_all_neighbors(root, info):
                 return [
                     Node.from_vertex(v)
-                    for v in self[root.name].all_neighbors()
+                    for v in root.graph[root.name].all_neighbors()
                 ]
             
             def resolve_in_neighbors(root, info):
                 return [
                     Node.from_vertex(v)
-                    for v in self[root.name].in_neighbors()
+                    for v in root.graph[root.name].in_neighbors()
                 ]
             
             def resolve_out_neighbors(root, info):
                 return [
                     Node.from_vertex(v)
-                    for v in self[root.name].out_neighbors()
+                    for v in root.graph[root.name].out_neighbors()
                 ]
         
             def resolve_all_edges(root, info):
                 return [
                     Edge.from_edge(e)
-                    for e in self[root.name].all_edges()
+                    for e in root.graph[root.name].all_edges()
                 ]
             
             def resolve_in_edges(root, info):
                 return [
                     Edge.from_edge(e)
-                    for e in self[root.name].in_edges()
+                    for e in root.graph[root.name].in_edges()
                 ]
             
             def resolve_out_edges(root, info):
                 return [
                     Edge.from_edge(e)
-                    for e in self[root.name].out_edges()
+                    for e in root.graph[root.name].out_edges()
                 ]
             
         EdgeValueObject = namedtuple("Edge", ["source", "target", "predicates", "element"])
@@ -562,27 +564,54 @@ class DocumentGraph:
                     element="{}",  # TODO Implement
                 )
         
-        TripleValueObject = namedtuple("Triple", ["object", "predicate", "subject"])
-        class Triple(ObjectType):
-            object = Field(lambda: Node, required=True)
-            predicate = Field(lambda: Edge, required=True)
-            subject = Field(lambda: Node, required=True)
+        class FilterInput(graphene.InputObjectType):
+            """ Object for filtering queries """
+
+            @property
+            def graph(this):
+                graph = self
+                if this.in_subgraph is not None:
+                    graph = graph.subgraph_around(self[this.in_subgraph])
+                if this.predicate is not None:
+                    graph = graph.predicate_masked(this.predicate)
+                return graph
+
+            in_subgraph = graphene.String(required=False)
+            """ If present, this filters results within the named subgraph """
+
+            predicate = graphene.String(required=False)
+            """ If present, this filters results by the given predicate """
 
         class Query(ObjectType):
-            nodes = List(Node)
-            node_by_name = Field(Node, name=graphene.String(required=True))
-            node_by_id = Field(Node, id=graphene.ID(required=True))
+            nodes = List(
+                Node,
+                filter=graphene.Argument(FilterInput, required=True, default_value=None),
+            )
+            node_by_name = Field(
+                Node,
+                name=graphene.String(required=True),
+                filter=graphene.Argument(FilterInput, required=True, default_value=None),
+            )
+            node_by_id = Field(
+                Node,
+                id=graphene.ID(required=True),
+                filter=graphene.Argument(FilterInput, required=True, default_value=None),
+            )
 
-            def resolve_nodes(parent, info):
+            def resolve_nodes(parent, info, filter=None):
+                graph = self if filter is None else filter.graph
                 return [
-                    Node.from_vertex(v) for v in self.vertices
+                    Node.from_vertex(v) for v in graph.vertices
                 ]
 
-            def resolve_node_by_name(parent, info, name):
-                return Node.from_vertex(self[name])
+            def resolve_node_by_name(parent, info, name, filter=None):
+                graph = self if filter is None else filter.graph
+                print(graph.graph)
+                return Node.from_vertex(graph[name])
 
-            def resolve_node_by_id(parent, info, id):
-                return Node.from_vertex(self.get_vertex_by_id(id))
+            def resolve_node_by_id(parent, info, id, filter=None):
+                graph = self if filter is None else filter.graph
+                return Node.from_vertex(graph.get_vertex_by_id(id))
 
         return Schema(
             query=Query,
