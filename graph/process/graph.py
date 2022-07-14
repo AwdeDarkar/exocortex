@@ -28,6 +28,8 @@ from graph_tool.draw import graph_draw
 import graphene
 from graphene import ObjectType, List, Field, Schema
 
+from process.parse_markdown import load_content
+
 class RawString(InlineElement):
     """ It seems inconsistent to have bare strings alongside elements... """
 
@@ -131,6 +133,10 @@ class DocumentVertex:
     @property
     def name(self):
         return self["names"]
+    
+    @property
+    def document_json(self):
+        return self["document_json"]
     
     @name.setter
     def name(self, value):
@@ -240,10 +246,10 @@ class DocumentGraph:
     def load(cls, path):
         return cls(graph=load_graph(path, fmt="gt"))
 
-    def __init__(self, doc_map=None, graph=None):
+    def __init__(self, content_dir=None, graph=None):
         self.__class__._setup_calculations()
-        if bool(doc_map) == bool(graph):
-            raise Exception("Exactly one of `doc_map` or `graph` must be set!")
+        if bool(content_dir) == bool(graph):
+            raise Exception("Exactly one of `content_dir` or `graph` must be set!")
         self.graph = graph or Graph(directed=True)
         self.vertex_map = {}
         self.vertex_id_map = {}
@@ -278,8 +284,8 @@ class DocumentGraph:
 
         self.props = _graph_props()
 
-        if doc_map:
-            self._build_graph(doc_map)
+        if content_dir:
+            self._build_graph(content_dir)
         else:
             self._populate_map()
         
@@ -293,18 +299,21 @@ class DocumentGraph:
                 edge.target().name,
             )] = edge
 
-    def _build_graph(self, doc_map):
+    def _build_graph(self, content_dir):
+        doc_map, json_map = load_content(content_dir)
         doc_map = collect_semlinks(doc_map)
         vertices = self.graph.add_vertex(len(doc_map))
         self.props.vertex.names = self.graph.new_vertex_property("string")
         self.props.vertex.uuids = self.graph.new_vertex_property("string")
         self.props.vertex.documents = self.graph.new_vertex_property("python::object")
+        self.props.vertex.document_json = self.graph.new_vertex_property("python::object")
 
         for name, vertex in zip(doc_map.keys(), vertices):
             self.vertex_map[name] = vertex
             self.props.vertex.names[vertex] = name
             self.props.vertex.uuids[vertex] = uuid4()  # TODO we need bidirection persistence...
             self.props.vertex.documents[vertex] = doc_map[name]["document"]
+            self.props.vertex.document_json[vertex] = json_map[name]
 
             self.vertex_id_map[self.props.vertex.uuids[vertex]] = vertex
 
@@ -380,7 +389,7 @@ class DocumentGraph:
         """ Get a dictionary of all predicates with the number of times they appear """
         counts = {}
         for edge in self.edges:
-            for predicate in self.props.edge.predicates[edge]:
+            for predicate in self.props.edge.predicates[edge.edge]:
                 counts[predicate] = counts.get(predicate, 0) + 1
         return counts
     
@@ -433,6 +442,18 @@ class DocumentGraph:
             for subv in self.vertices_in_from(neighboor):
                 yield subv
     
+    def subgraph_predicate_around(self, root, predicate, include_root=True):
+        """ Return a subgraph of the graph around the given vertex, filtered by the given predicate """
+        pgraph = self.predicate_masked(predicate, raw=False)
+        root = pgraph[root.name]
+        gen = (v.vertex for v in pgraph.vertices_in_from(root))
+        if include_root:
+            selected = set(gen)
+        else:
+            next(gen)
+            selected = set(gen)
+        return DocumentGraph(graph=GraphView(self.graph, vfilt=lambda v: v in selected))
+
     def subgraph_around(self, root, include_root=True):
         """ Uses the 'in' predicate to get the subgraph around a root """
         ingraph = self.pgraph_in
@@ -444,6 +465,13 @@ class DocumentGraph:
             next(gen)
             selected = set(gen)
         return DocumentGraph(graph=GraphView(self.graph, vfilt=lambda v: v in selected))
+    
+    def vertices_of_type(self, type_name):
+        """ Get a set of vertices linked to the given type by an 'is' predicate """
+        return (
+            self[v.name]
+            for v in self.subgraph_predicate_around(self[type_name], "is", include_root=False).vertices
+        )
     
     def save(self, path):
         self.graph.save(path, fmt="gt")
@@ -508,7 +536,7 @@ class DocumentGraph:
                 return NodeValueObject(
                     id=vertex.uuid,
                     name=vertex.name,
-                    document="{}",  # TODO Implement
+                    document=vertex.document_json,
                     graph=vertex.docgraph,
                 )
             
@@ -585,6 +613,7 @@ class DocumentGraph:
         class Query(ObjectType):
             nodes = List(
                 Node,
+                type=graphene.String(required=True),
                 filter=graphene.Argument(FilterInput, required=True, default_value=None),
             )
             node_by_name = Field(
@@ -598,11 +627,16 @@ class DocumentGraph:
                 filter=graphene.Argument(FilterInput, required=True, default_value=None),
             )
 
-            def resolve_nodes(parent, info, filter=None):
+            def resolve_nodes(parent, info, type=None, filter=None):
                 graph = self if filter is None else filter.graph
-                return [
-                    Node.from_vertex(v) for v in graph.vertices
-                ]
+                if type is None:
+                    return [
+                        Node.from_vertex(v) for v in graph.vertices
+                    ]
+                else:
+                    return [
+                        Node.from_vertex(v) for v in graph.vertices_of_type(type)
+                    ]
 
             def resolve_node_by_name(parent, info, name, filter=None):
                 graph = self if filter is None else filter.graph

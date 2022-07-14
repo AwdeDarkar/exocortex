@@ -235,10 +235,8 @@ def recursive_load(root_dir, parent=""):
                     + f.read()
     return raw_map
 
-def load_content(content_dir):
-    content_map = recursive_load(content_dir)
-    ast_map = {}
 
+def make_renderer():
     renderer = marko.Markdown(
         extensions=[
             LinkExtension,
@@ -249,7 +247,18 @@ def load_content(content_dir):
     )
     renderer._setup_extensions()
     renderer.parser.block_elements["DirectiveBlock"] = DirectiveBlock  # BUG: This shouldn't be needed...
+    return renderer
+renderer = make_renderer()
+
+
+def load_content(content_dir):
+    content_map = recursive_load(content_dir)
+    ast_map = {}
+    json_map = {}
+
     for name, raw in content_map.items():
         ast_map[name] = renderer.parse(raw)
+        json_map[name] = renderer.render(ast_map[name])
+        # print(renderer.render(ast_map[name]))
     
-    return ast_map
+    return ast_map, json_map
