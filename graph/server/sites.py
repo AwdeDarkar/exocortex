@@ -11,9 +11,9 @@ Released under the Apache 2.0 license as described in the file LICENSE.
 from exo_server import Site, DefaultSite
 
 
-class DevelopmentSite(DefaultSite):
+class AdminSite(DefaultSite):
     """
-    Development site.
+    Admin site.
     """
 
-    NAME = "development"
+    NAME = "admin"

@@ -6,7 +6,7 @@
         <link rel='stylesheet' href='{{ site }}/bundle.css'>
 
         <script type=text/javascript>
-            const contentTree = {{ contentTree | tojson | safe }};
+            const contentTree = {{ contentTree | safe }};
         </script>
 
         <script defer src='{{ site }}/bundle.js'></script>

@@ -1,12 +1,16 @@
 <script lang="ts">
-    import Tree from "./common/component/Tree.svelte"
+    import ContentNode from "./common/component/ContentNode.svelte"
+    import ASTNode from "./common/interface/ast"
     export let contentTree: any
     console.log(contentTree)
+
+    const node: ASTNode = ASTNode.loadNode(contentTree)
+     console.log(node)
 </script>
 
 <main>
     <div>
-        <Tree tree={contentTree} />
+        <ContentNode node={node} />
     </div>
 </main>
 
@@ -16,13 +20,6 @@ main {
 padding: 1em;
          max-width: 240px;
 margin: 0 auto;
-}
-
-h1 {
-color: #ff3e00;
-       text-transform: uppercase;
-       font-size: 4em;
-       font-weight: 100;
 }
 
 @media (min-width: 640px) {

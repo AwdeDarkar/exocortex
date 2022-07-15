@@ -10,7 +10,7 @@ Released under the Apache 2.0 license as described in the file LICENSE.
 
 from exo_server import ServerHandler, DefaultSite
 from sites import (
-    DevelopmentSite,
+    AdminSite,
 )
 
 class DevelopmentServer(ServerHandler):
@@ -26,4 +26,4 @@ class DevelopmentServer(ServerHandler):
     }
 
 
-DevelopmentServer.site(DevelopmentSite)
+DevelopmentServer.site(AdminSite)

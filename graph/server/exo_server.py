@@ -15,16 +15,19 @@ import os
 from functools import cached_property
 from types import SimpleNamespace
 from dataclasses import dataclass
+from pathlib import Path
 
 from typing import Callable
 
 from flask import Flask, Response
 from jinja2 import Environment, FileSystemLoader
 
-from storage import SITES_ROOT
+from storage import SITES_ROOT, CONTENT_ROOT
 
 from server.url import VisitorResolver
 from server.nodejs import NodeJS
+
+from process.graph import DocumentGraph
 
 class sv_meta(type):
     """ Provides class properties for the ServerHandler """
@@ -120,6 +123,7 @@ class ServerHandler(metaclass=sv_meta):
     def __init__(self):
         for site in self.SITES.values():
             site.server = self
+        self.document_graph = DocumentGraph(content_dir=CONTENT_ROOT)
         self.setup_routes()
     
     @cached_property
@@ -166,19 +170,24 @@ class ServerHandler(metaclass=sv_meta):
         Generate a content tree from a parsed URL.
 
         TODO: Access-checking will happen here when users are implemented.
-        TODO: Implement; this is a placeholder.
         """
-        return [
+        result = self.resolve_query("""
             {
-                "type": "document",
-                "children": [
-                    {
-                        "type": "paragraph",
-                        "content": "This is a placeholder content tree.",
-                    },
-                ]
+                nodeByName(name: "%s") {
+                    document
+                }
             }
-        ]
+        """ % (parsed.semantic_target.get("object", parsed.siteview),))
+        if result.errors:
+            for error in result.errors:
+                raise Exception(error.message)
+        return result.data["nodeByName"]["document"]
+    
+    def resolve_query(self, query):
+        """
+        Resolve the GraphQL query against the DocumentGraph.
+        """
+        return self.document_graph.graphql_schema.execute(query)
     
     @classmethod
     def get_site(cls, name):
@@ -397,7 +406,7 @@ class DefaultSite(Site):
         Get a JSON tree view for a page.
         """
         return Response(
-            json.dumps(content_tree),
+            content_tree,
             mimetype="application/json",
         )
     

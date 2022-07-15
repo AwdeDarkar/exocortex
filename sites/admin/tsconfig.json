@@ -3,6 +3,7 @@
 
   "compilerOptions": {
     "moduleResolution": "node",
+    "experimentalDecorators": true,
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules/*", "__sapper__/*", "public/*"]
