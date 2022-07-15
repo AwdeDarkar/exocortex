@@ -216,6 +216,7 @@ class DirectiveExtension:
 
 def recursive_load(root_dir, parent=""):
     """ TODO: still not sure what to do about name collisions... """
+    ignore_dirs = ["__pycache__", ".git"]
     raw_map = {}
     this = root_dir / "this.md"
     if this.exists():
@@ -223,7 +224,9 @@ def recursive_load(root_dir, parent=""):
             raw_map[root_dir.stem] = (parent and f"[[in|{parent}]]\n") + f.read()
     parent_group = root_dir.stem if this.exists() else parent
     for child in root_dir.iterdir():
-        if child.stem == "this":
+        if child.stem in ignore_dirs:
+            continue
+        elif child.stem == "this":
             continue
         elif child.is_dir():
             raw_map.update(

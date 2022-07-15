@@ -1,0 +1,10 @@
+[predicates]
+
+[predicates.is]
+a = true
+
+[predicates.ref]
+a = true
+
+[predicates.cite]
+a = true
