@@ -180,8 +180,11 @@ export class ParagraphNode extends RecursiveNode {
 
 @ASTNode.registerNode("raw_text")
 export class TextNode extends ASTNode {
-    constructor(obj: {} & ASTObject) {
+    public readonly text: string
+
+    constructor(obj: { children: string } & ASTObject) {
         super(obj)
+        this.text = obj.children
     }
 }
 
